@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Japanese Learning Flashcards</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e0e7ff; /* Lighter indigo background */
+            color: #374151; /* Gray 700 for text */
+            padding-bottom: 5rem; /* Padding for fixed scores bar, adjust if needed */
+        }
+        .japanese-char-display, .word-display-hiragana {
+            font-family: 'Noto Sans JP', sans-serif;
+            font-size: 4rem; /* Slightly smaller for word display */
+            color: #334155; /* Slate 700 */
+            line-height: 1.2;
+        }
+        .word-display-kanji {
+            font-family: 'Noto Sans JP', sans-serif;
+            font-size: 1.75rem; /* Smaller for Kanji */
+            color: #4b5563; /* Gray 600 */
+            margin-top: -0.5rem; /* Adjust spacing if Kanji is present */
+            display: block; /* Ensure it takes its own line if needed */
+        }
+        .number-display {
+            font-family: 'Inter', sans-serif;
+            font-size: 5rem;
+            color: #334155; /* Slate 700 */
+            font-weight: 700;
+        }
+        .feedback-correct { color: #059669; /* Emerald 600 */ }
+        .feedback-incorrect { color: #dc2626; /* Red 600 */ }
+
+        .choice-button {
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out, box-shadow 0.2s ease-in-out;
+            border: 1px solid transparent;
+            min-height: 3rem;
+        }
+        .choice-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-color: #6366f1; /* Indigo 500 */
+        }
+        .choice-button:active { transform: translateY(0px); }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            padding: 1.5rem;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        .main-container {
+            width: 100%;
+            max-width: 640px;
+            padding: 1rem;
+            margin-bottom: 1rem; /* Margin to avoid overlap with score bar before scroll */
+        }
+        .example-word-char { font-family: 'Noto Sans JP', sans-serif; }
+        .nav-button {
+            transition: background-color 0.2s ease, color 0.2s ease, transform 0.1s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+        }
+        .nav-button.active {
+            background-color: #4f46e5; /* Indigo 600 */
+            color: white;
+        }
+        .nav-button:not(.active):hover {
+            background-color: #c7d2fe; /* Indigo 200 */
+            transform: translateY(-1px);
+        }
+        .nav-container {
+            background-color: white;
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            margin-bottom: 1.5rem;
+        }
+        .scores-container {
+            background-color: white;
+            padding: 0.75rem 1rem; /* Adjusted padding */
+            box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.1), 0 -2px 4px -1px rgba(0,0,0,0.06);
+            width: 100%;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+        }
+        .score-line { /* Now used for individual score items in a row */
+            color: #4b5563;
+            font-size: 0.875rem; /* text-sm */
+            white-space: nowrap; /* Prevent individual scores from breaking line */
+        }
+        .score-lines-wrapper { /* For the single line of scores */
+            display: flex;
+            flex-direction: row; /* Scores in a row */
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            justify-content: center; /* Center the scores line */
+            align-items: center;
+            max-width: 100%; /* Allow full width for wrapper */
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .score-separator {
+            margin: 0 0.5rem; /* Space around the separator */
+            color: #9ca3af; /* Gray 400 for separator */
+        }
+        .japanese-writing-feedback {
+             font-family: 'Noto Sans JP', sans-serif;
+             font-size: 1.5rem;
+             color: #4b5563;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center min-h-screen p-4 pt-6">
+
+    <nav class="nav-container">
+        <div class="flex space-x-1 sm:space-x-2 justify-center">
+            <button id="nav-hiragana" data-mode="hiragana" class="nav-button">Hiragana</button>
+            <button id="nav-katakana" data-mode="katakana" class="nav-button">Katakana</button>
+            <button id="nav-numbers" data-mode="numbers" class="nav-button">Numbers</button>
+            <button id="nav-words" data-mode="words" class="nav-button">Words</button>
+        </div>
+    </nav>
+
+    <div id="app-container" class="main-container">
+        <div id="question-view" class="card text-center">
+            <h1 id="question-title" class="text-xl sm:text-2xl font-semibold mb-6 text-slate-700"></h1>
+            <div id="item-display" class="mb-6">
+                </div>
+            <hr class="border-slate-300 my-6">
+            <div id="choices-container">
+                </div>
+        </div>
+
+        <div id="feedback-view" class="card text-center hidden">
+            <div id="feedback-message" class="text-2xl sm:text-3xl font-bold mb-3"></div>
+            <div id="correct-answer-display" class="text-lg sm:text-xl text-slate-600 mb-3"></div>
+            <div id="japanese-writing-display" class="japanese-writing-feedback mb-4"></div>
+            <div id="example-words-container" class="mt-4 mb-5 text-left">
+                <h3 class="text-md sm:text-lg font-semibold text-slate-700 mb-2">Example Words:</h3>
+                <ul id="example-words-list" class="list-disc list-inside pl-2 space-y-1 text-sm sm:text-base text-slate-600"></ul>
+            </div>
+            <button id="next-button" class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md w-full sm:w-auto text-lg transition-transform hover:scale-105">
+                Next
+            </button>
+        </div>
+    </div>
+
+    <div id="scores-display-area" class="scores-container">
+        <div class="score-lines-wrapper">
+            <span id="score-hiragana" class="score-line">Hiragana: 0/0 (0%)</span>
+            <span class="score-separator">|</span>
+            <span id="score-katakana" class="score-line">Katakana: 0/0 (0%)</span>
+            <span class="score-separator">|</span>
+            <span id="score-numbers" class="score-line">Numbers: 0/0 (0%)</span>
+            <span class="score-separator">|</span>
+            <span id="score-words" class="score-line">Words: 0/0 (0%)</span>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA SETS ---
+        const datasets = {
+            hiragana: {
+                name: "Hiragana",
+                questionLabel: "Choose the correct Romaji",
+                data: [
+                    { char: "あ", romaji: "a", words: [ { hiragana: "あさ", romaji: "asa", meaning: "morning" }] },
+                    { char: "い", romaji: "i", words: [ { hiragana: "いぬ", romaji: "inu", meaning: "dog" }] },
+                    { char: "う", romaji: "u", words: [ { hiragana: "うし", romaji: "ushi", meaning: "cow" }] },
+                    { char: "え", romaji: "e", words: [ { hiragana: "えき", romaji: "eki", meaning: "station" }] },
+                    { char: "お", romaji: "o", words: [ { hiragana: "おちゃ", romaji: "ocha", meaning: "tea" }] },
+                    { char: "か", romaji: "ka", words: [{ hiragana: "かさ", romaji: "kasa", meaning: "umbrella"}] },
+                    { char: "き", romaji: "ki", words: [{ hiragana: "きもの", romaji: "kimono", meaning: "kimono"}] },
+                    { char: "く", romaji: "ku", words: [{ hiragana: "くつ", romaji: "kutsu", meaning: "shoes"}] },
+                    { char: "け", romaji: "ke", words: [{ hiragana: "けしき", romaji: "keshiki", meaning: "scenery"}] },
+                    { char: "こ", romaji: "ko", words: [{ hiragana: "こども", romaji: "kodomo", meaning: "child"}] },
+                    { char: "さ", romaji: "sa", words: [{ hiragana: "さかな", romaji: "sakana", meaning: "fish"}] },
+                    { char: "し", romaji: "shi", words: [{ hiragana: "しまうま", romaji: "shimauma", meaning: "zebra"}] },
+                    { char: "す", romaji: "su", words: [{ hiragana: "すいか", romaji: "suika", meaning: "watermelon"}] },
+                    { char: "せ", romaji: "se", words: [{ hiragana: "せなか", romaji: "senaka", meaning: "back (body)"}] },
+                    { char: "そ", romaji: "so", words: [{ hiragana: "そら", romaji: "sora", meaning: "sky"}] },
+                    { char: "た", romaji: "ta", words: [{ hiragana: "たかい", romaji: "takai", meaning: "tall/expensive"}] },
+                    { char: "ち", romaji: "chi", words: [{ hiragana: "ちいさい", romaji: "chiisai", meaning: "small"}] },
+                    { char: "つ", romaji: "tsu", words: [{ hiragana: "つくえ", romaji: "tsukue", meaning: "desk"}] },
+                    { char: "て", romaji: "te", words: [{ hiragana: "てがみ", romaji: "tegami", meaning: "letter"}] },
+                    { char: "と", romaji: "to", words: [{ hiragana: "とけい", romaji: "tokei", meaning: "clock/watch"}] },
+                    { char: "な", romaji: "na", words: [{ hiragana: "なつ", romaji: "natsu", meaning: "summer"}] },
+                    { char: "に", romaji: "ni", words: [{ hiragana: "にく", romaji: "niku", meaning: "meat"}] },
+                    { char: "ぬ", romaji: "nu", words: [{ hiragana: "ぬの", romaji: "nuno", meaning: "cloth"}] },
+                    { char: "ね", romaji: "ne", words: [{ hiragana: "ねこ", romaji: "neko", meaning: "cat"}] },
+                    { char: "の", romaji: "no", words: [{ hiragana: "のり", romaji: "nori", meaning: "seaweed"}] },
+                    { char: "は", romaji: "ha", words: [{ hiragana: "はな", romaji: "hana", meaning: "flower/nose"}] },
+                    { char: "ひ", romaji: "hi", words: [{ hiragana: "ひこうき", romaji: "hikouki", meaning: "airplane"}] },
+                    { char: "ふ", romaji: "fu", words: [{ hiragana: "ふね", romaji: "fune", meaning: "boat"}] },
+                    { char: "へ", romaji: "he", words: [{ hiragana: "へや", romaji: "heya", meaning: "room"}] },
+                    { char: "ほ", romaji: "ho", words: [{ hiragana: "ほん", romaji: "hon", meaning: "book"}] },
+                    { char: "ま", romaji: "ma", words: [{ hiragana: "まち", romaji: "machi", meaning: "town"}] },
+                    { char: "み", romaji: "mi", words: [{ hiragana: "みみ", romaji: "mimi", meaning: "ear"}] },
+                    { char: "む", romaji: "mu", words: [{ hiragana: "むし", romaji: "mushi", meaning: "insect"}] },
+                    { char: "め", romaji: "me", words: [{ hiragana: "めがね", romaji: "megane", meaning: "glasses"}] },
+                    { char: "も", romaji: "mo", words: [{ hiragana: "もも", romaji: "momo", meaning: "peach"}] },
+                    { char: "や", romaji: "ya", words: [{ hiragana: "やま", romaji: "yama", meaning: "mountain"}] },
+                    { char: "ゆ", romaji: "yu", words: [{ hiragana: "ゆき", romaji: "yuki", meaning: "snow"}] },
+                    { char: "よ", romaji: "yo", words: [{ hiragana: "よる", romaji: "yoru", meaning: "night"}] },
+                    { char: "ら", romaji: "ra", words: [{ hiragana: "らくだ", romaji: "rakuda", meaning: "camel"}] },
+                    { char: "り", romaji: "ri", words: [{ hiragana: "りんご", romaji: "ringo", meaning: "apple"}] },
+                    { char: "る", romaji: "ru", words: [{ hiragana: "るす", romaji: "rusu", meaning: "absent"}] },
+                    { char: "れ", romaji: "re", words: [{ hiragana: "れきし", romaji: "rekishi", meaning: "history"}] },
+                    { char: "ろ", romaji: "ro", words: [{ hiragana: "ろうそく", romaji: "rousoku", meaning: "candle"}] },
+                    { char: "わ", romaji: "wa", words: [{ hiragana: "わたし", romaji: "watashi", meaning: "I/me"}] },
+                    { char: "を", romaji: "wo", words: [] }, { char: "ん", romaji: "n", words: [] },
+                    { char: "きゃ", romaji: "kya", words: [{ hiragana: "きゃく", romaji: "kyaku", meaning: "guest"}] }, { char: "きゅ", romaji: "kyu", words: [{ hiragana: "きゅうり", romaji: "kyuuri", meaning: "cucumber"}] }, { char: "きょ", romaji: "kyo", words: [{ hiragana: "きょう", romaji: "kyou", meaning: "today"}] },
+                ]
+            },
+            katakana: {
+                name: "Katakana",
+                questionLabel: "Choose the correct Romaji",
+                data: [
+                    { char: "ア", romaji: "a", words: [ { katakana: "アメリカ", romaji: "amerika", meaning: "America" } ]},
+                    { char: "イ", romaji: "i", words: [ { katakana: "インド", romaji: "indo", meaning: "India" } ]},
+                    { char: "ウ", romaji: "u", words: [ { katakana: "ウイスキー", romaji: "uisukii", meaning: "whiskey" } ]},
+                    { char: "エ", romaji: "e", words: [ { katakana: "エアコン", romaji: "eakon", meaning: "air conditioner" } ]},
+                    { char: "オ", romaji: "o", words: [ { katakana: "オレンジ", romaji: "orenji", meaning: "orange" } ]},
+                    { char: "カ", romaji: "ka", words: [{ katakana: "カメラ", romaji: "kamera", meaning: "camera"}] },
+                    { char: "キ", romaji: "ki", words: [{ katakana: "キロ", romaji: "kiro", meaning: "kilo"}] },
+                    { char: "ク", romaji: "ku", words: [{ katakana: "クラス", romaji: "kurasu", meaning: "class"}] },
+                    { char: "ケ", romaji: "ke", words: [{ katakana: "ケーキ", romaji: "keeki", meaning: "cake"}] },
+                    { char: "コ", romaji: "ko", words: [{ katakana: "コーヒー", romaji: "koohii", meaning: "coffee"}] },
+                    { char: "サ", romaji: "sa", words: [{ katakana: "サラダ", romaji: "sarada", meaning: "salad"}] },
+                    { char: "シ", romaji: "shi", words: [{ katakana: "システム", romaji: "shisutemu", meaning: "system"}] },
+                    { char: "ス", romaji: "su", words: [{ katakana: "スープ", romaji: "suupu", meaning: "soup"}] },
+                    { char: "セ", romaji: "se", words: [{ katakana: "セーター", romaji: "seetaa", meaning: "sweater"}] },
+                    { char: "ソ", romaji: "so", words: [{ katakana: "ソファ", romaji: "sofa", meaning: "sofa"}] },
+                    { char: "タ", romaji: "ta", words: [{ katakana: "タクシー", romaji: "takushii", meaning: "taxi"}] },
+                    { char: "チ", romaji: "chi", words: [{ katakana: "チーズ", romaji: "chiizu", meaning: "cheese"}] },
+                    { char: "ツ", romaji: "tsu", words: [{ katakana: "ツアー", romaji: "tsuaa", meaning: "tour"}] },
+                    { char: "テ", romaji: "te", words: [{ katakana: "テレビ", romaji: "terebi", meaning: "television"}] },
+                    { char: "ト", romaji: "to", words: [{ katakana: "トマト", romaji: "tomato", meaning: "tomato"}] },
+                    { char: "ナ", romaji: "na", words: [{ katakana: "ナイフ", romaji: "naifu", meaning: "knife"}] },
+                    { char: "ニ", romaji: "ni", words: [{ katakana: "ニュース", romaji: "nyuusu", meaning: "news"}] },
+                    { char: "ヌ", romaji: "nu", words: [] },
+                    { char: "ネ", romaji: "ne", words: [{ katakana: "ネクタイ", romaji: "nekutai", meaning: "necktie"}] },
+                    { char: "ノ", romaji: "no", words: [{ katakana: "ノート", romaji: "nooto", meaning: "notebook"}] },
+                    { char: "ハ", romaji: "ha", words: [{ katakana: "ハンバーガー", romaji: "hanbaagaa", meaning: "hamburger"}] },
+                    { char: "ヒ", romaji: "hi", words: [{ katakana: "ビール", romaji: "biiru", meaning: "beer"}] },
+                    { char: "フ", romaji: "fu", words: [{ katakana: "フランス", romaji: "furansu", meaning: "France"}] },
+                    { char: "ヘ", romaji: "he", words: [{ katakana: "ヘリコプター", romaji: "herikoputaa", meaning: "helicopter"}] },
+                    { char: "ホ", romaji: "ho", words: [{ katakana: "ホーム", romaji: "hoomu", meaning: "platform/home"}] },
+                    { char: "マ", romaji: "ma", words: [{ katakana: "マイク", romaji: "maiku", meaning: "microphone"}] },
+                    { char: "ミ", romaji: "mi", words: [{ katakana: "ミルク", romaji: "miruku", meaning: "milk"}] },
+                    { char: "ム", romaji: "mu", words: [] },
+                    { char: "メ", romaji: "me", words: [{ katakana: "メール", romaji: "meeru", meaning: "e-mail"}] },
+                    { char: "モ", romaji: "mo", words: [{ katakana: "モーター", romaji: "mootaa", meaning: "motor"}] },
+                    { char: "ヤ", romaji: "ya", words: [{ katakana: "タイヤ", romaji: "taiya", meaning: "tire"}] },
+                    { char: "ユ", romaji: "yu", words: [{ katakana: "ユーモア", romaji: "yuumoa", meaning: "humor"}] },
+                    { char: "ヨ", romaji: "yo", words: [{ katakana: "ヨーロッパ", romaji: "yooroppa", meaning: "Europe"}] },
+                    { char: "ラ", romaji: "ra", words: [{ katakana: "ラジオ", romaji: "rajio", meaning: "radio"}] },
+                    { char: "リ", romaji: "ri", words: [{ katakana: "リスト", romaji: "risuto", meaning: "list"}] },
+                    { char: "ル", romaji: "ru", words: [{ katakana: "ルール", romaji: "ruuru", meaning: "rule"}] },
+                    { char: "レ", romaji: "re", words: [{ katakana: "レストラン", romaji: "resutoran", meaning: "restaurant"}] },
+                    { char: "ロ", romaji: "ro", words: [{ katakana: "ロボット", romaji: "robotto", meaning: "robot"}] },
+                    { char: "ワ", romaji: "wa", words: [{ katakana: "ワイン", romaji: "wain", meaning: "wine"}] },
+                    { char: "ヲ", romaji: "wo", words: [] }, { char: "ン", romaji: "n", words: [] },
+                    { char: "キャ", romaji: "kya", words: [{ katakana: "キャンプ", romaji: "kyanpu", meaning: "camp"}] },
+                ]
+            },
+            numbers: {
+                name: "Numbers",
+                questionLabel: "Choose the correct Japanese pronunciation",
+                data: [
+                    { display: "1", romaji: "ichi", japanese: "一" }, { display: "2", romaji: "ni", japanese: "二" },
+                    { display: "3", romaji: "san", japanese: "三" }, { display: "4", romaji: "yon", japanese: "四" },
+                    { display: "5", romaji: "go", japanese: "五" }, { display: "6", romaji: "roku", japanese: "六" },
+                    { display: "7", romaji: "nana", japanese: "七" }, { display: "8", romaji: "hachi", japanese: "八" },
+                    { display: "9", romaji: "kyuu", japanese: "九" }, { display: "10", romaji: "juu", japanese: "十" },
+                    { display: "20", romaji: "nijuu", japanese: "二十" },
+                    { display: "100", romaji: "hyaku", japanese: "百" }, { display: "1000", romaji: "sen", japanese: "千" }
+                ]
+            },
+            words: {
+                name: "Words",
+                questionLabel: "Choose the correct English meaning",
+                data: [
+    { hiragana: "たべる", kanji: "食べる", meaning: "to eat" },
+    { hiragana: "のむ", kanji: "飲む", meaning: "to drink" },
+    { hiragana: "いく", kanji: "行く", meaning: "to go" },
+    { hiragana: "みる", kanji: "見る", meaning: "to see/watch" },
+    { hiragana: "きく", kanji: "聞く", meaning: "to listen/hear/ask" },
+    { hiragana: "よむ", kanji: "読む", meaning: "to read" },
+    { hiragana: "かく", kanji: "書く", meaning: "to write" },
+    { hiragana: "はなす", kanji: "話す", meaning: "to speak/talk" },
+    { hiragana: "かう", kanji: "買う", meaning: "to buy" },
+    { hiragana: "おきる", kanji: "起きる", meaning: "to get up" },
+    { hiragana: "ねる", kanji: "寝る", meaning: "to sleep" },
+    { hiragana: "くる", kanji: "来る", meaning: "to come" },
+    { hiragana: "する", kanji: "する", meaning: "to do" },
+    { hiragana: "べんきょうする", kanji: "勉強する", meaning: "to study" },
+    { hiragana: "あう", kanji: "会う", meaning: "to meet" },
+    { hiragana: "ある", kanji: "有る", meaning: "to exist (inanimate)" },
+    { hiragana: "いる", kanji: "居る", meaning: "to exist (animate)" },
+    { hiragana: "わかる", kanji: "分かる", meaning: "to understand" },
+    { hiragana: "しる", kanji: "知る", meaning: "to know" },
+    { hiragana: "はいる", kanji: "入る", meaning: "to enter" },
+    { hiragana: "でる", kanji: "出る", meaning: "to go out/leave" },
+    { hiragana: "つくる", kanji: "作る", meaning: "to make" },
+    { hiragana: "つかう", kanji: "使う", meaning: "to use" },
+    { hiragana: "やすむ", kanji: "休む", meaning: "to rest/take a day off" },
+    { hiragana: "およぐ", kanji: "泳ぐ", meaning: "to swim" },
+    { hiragana: "ひと", kanji: "人", meaning: "person" },
+    { hiragana: "がくせい", kanji: "学生", meaning: "student" },
+    { hiragana: "せんせい", kanji: "先生", meaning: "teacher" },
+    { hiragana: "がっこう", kanji: "学校", meaning: "school" },
+    { hiragana: "にほん", kanji: "日本", meaning: "Japan" },
+    { hiragana: "にほんご", kanji: "日本語", meaning: "Japanese language" },
+    { hiragana: "えいご", kanji: "英語", meaning: "English language" },
+    { hiragana: "ほん", kanji: "本", meaning: "book" },
+    { hiragana: "つくえ", kanji: "机", meaning: "desk" },
+    { hiragana: "いす", kanji: "椅子", meaning: "chair" },
+    { hiragana: "くるま", kanji: "車", meaning: "car" },
+    { hiragana: "でんしゃ", kanji: "電車", meaning: "train" },
+    { hiragana: "えき", kanji: "駅", meaning: "station" },
+    { hiragana: "みせ", kanji: "店", meaning: "shop/store" },
+    { hiragana: "うち", kanji: "家", meaning: "house/home" },
+    { hiragana: "いえ", kanji: "家", meaning: "house" },
+    { hiragana: "へや", kanji: "部屋", meaning: "room" },
+    { hiragana: "かぞく", kanji: "家族", meaning: "family" },
+    { hiragana: "ともだち", kanji: "友達", meaning: "friend" },
+    { hiragana: "てんき", kanji: "天気", meaning: "weather" },
+    { hiragana: "あめ", kanji: "雨", meaning: "rain" },
+    { hiragana: "ゆき", kanji: "雪", meaning: "snow" },
+    { hiragana: "ごはん", kanji: "ご飯", meaning: "rice/meal" },
+    { hiragana: "みず", kanji: "水", meaning: "water" },
+    { hiragana: "おちゃ", kanji: "お茶", meaning: "tea" },
+    { hiragana: "おおきい", kanji: "大きい", meaning: "big" },
+    { hiragana: "ちいさい", kanji: "小さい", meaning: "small" },
+    { hiragana: "あたらしい", kanji: "新しい", meaning: "new" },
+    { hiragana: "ふるい", kanji: "古い", meaning: "old (not for people)" },
+    { hiragana: "いい", kanji: "良い", meaning: "good" },
+    { hiragana: "わるい", kanji: "悪い", meaning: "bad" },
+    { hiragana: "たかい", kanji: "高い", meaning: "tall/expensive" },
+    { hiragana: "やすい", kanji: "安い", meaning: "cheap" },
+    { hiragana: "ひくい", kanji: "低い", meaning: "low" },
+    { hiragana: "おもしろい", kanji: "面白い", meaning: "interesting/funny" },
+    { hiragana: "たのしい", kanji: "楽しい", meaning: "fun/enjoyable" },
+    { hiragana: "むずかしい", kanji: "難しい", meaning: "difficult" },
+    { hiragana: "やさしい", kanji: "易しい", meaning: "easy (kind is 優しい)" },
+    { hiragana: "おいしい", kanji: "美味しい", meaning: "delicious" },
+    { hiragana: "まずい", kanji: "不味い", meaning: "bad tasting" },
+    { hiragana: "いそがしい", kanji: "忙しい", meaning: "busy" },
+    { hiragana: "あつい", kanji: "暑い", meaning: "hot (weather)" },
+    { hiragana: "さむい", kanji: "寒い", meaning: "cold (weather)" },
+    { hiragana: "あたたかい", kanji: "暖かい", meaning: "warm (weather)" },
+    { hiragana: "すずしい", kanji: "涼しい", meaning: "cool (weather)" },
+    { hiragana: "ちかい", kanji: "近い", meaning: "near/close" },
+    { hiragana: "とおい", kanji: "遠い", meaning: "far" },
+    { hiragana: "はやい", kanji: "速い", meaning: "fast/quick (early is 早い)" },
+    { hiragana: "おそい", kanji: "遅い", meaning: "slow/late" },
+    { hiragana: "げんき", kanji: "元気", meaning: "healthy/energetic (na-adj)" },
+    { hiragana: "いま", kanji: "今", meaning: "now" },
+    { hiragana: "きょう", kanji: "今日", meaning: "today" },
+    { hiragana: "あした", kanji: "明日", meaning: "tomorrow" },
+    { hiragana: "きのう", kanji: "昨日", meaning: "yesterday" },
+    { hiragana: "あさ", kanji: "朝", meaning: "morning" },
+    { hiragana: "ひる", kanji: "昼", meaning: "noon/daytime" },
+    { hiragana: "よる", kanji: "夜", meaning: "night" },
+    { hiragana: "ばん", kanji: "晩", meaning: "evening" },
+    { hiragana: "まいにち", kanji: "毎日", meaning: "every day" },
+    { hiragana: "まいあさ", kanji: "毎朝", meaning: "every morning" },
+    { hiragana: "まいばん", kanji: "毎晩", meaning: "every evening" },
+    { hiragana: "しゅう", kanji: "週", meaning: "week" },
+    { hiragana: "げつ", kanji: "月", meaning: "month/moon" },
+    { hiragana: "ねん", kanji: "年", meaning: "year" },
+    { hiragana: "じかん", kanji: "時間", meaning: "time/hour" },
+    { hiragana: "ふん", kanji: "分", meaning: "minute" },
+    { hiragana: "びょう", kanji: "秒", meaning: "second" },
+    { hiragana: "いつ", kanji: "何時", meaning: "when/what time" },
+    { hiragana: "とき", kanji: "時", meaning: "time/when (conjunction)" },
+    { hiragana: "ことし", kanji: "今年", meaning: "this year" },
+    { hiragana: "きょねん", kanji: "去年", meaning: "last year" },
+    { hiragana: "らいねん", kanji: "来年", meaning: "next year" },
+    { hiragana: "けさ", kanji: "今朝", meaning: "this morning" },
+    { hiragana: "こんばん", kanji: "今晩", meaning: "this evening" },
+    { hiragana: "しゅうまつ", kanji: "週末", meaning: "weekend" },
+    { hiragana: "しめる", kanji: "閉める", meaning: "to close (something)" },
+    { hiragana: "しまる", kanji: "閉まる", meaning: "to be closed" },
+    { hiragana: "あける", kanji: "開ける", meaning: "to open (something)" },
+    { hiragana: "あく", kanji: "開く", meaning: "to be open" },
+    { hiragana: "もつ", kanji: "持つ", meaning: "to hold/possess" },
+    { hiragana: "まつ", kanji: "待つ", meaning: "to wait" },
+    { hiragana: "たつ", kanji: "立つ", meaning: "to stand" },
+    { hiragana: "すわる", kanji: "座る", meaning: "to sit" },
+    { hiragana: "おしえる", kanji: "教える", meaning: "to teach/tell" },
+    { hiragana: "ならう", kanji: "習う", meaning: "to learn" },
+    { hiragana: "かりる", kanji: "借りる", meaning: "to borrow" },
+    { hiragana: "かす", kanji: "貸す", meaning: "to lend" },
+    { hiragana: "かえす", kanji: "返す", meaning: "to return (something)" },
+    { hiragana: "かえる", kanji: "帰る", meaning: "to return home" },
+    { hiragana: "きる", kanji: "着る", meaning: "to wear (upper body)" },
+    { hiragana: "ぬぐ", kanji: "脱ぐ", meaning: "to take off (clothes)" },
+    { hiragana: "はしる", kanji: "走る", meaning: "to run" },
+    { hiragana: "あるく", kanji: "歩く", meaning: "to walk" },
+    { hiragana: "とぶ", kanji: "飛ぶ", meaning: "to fly/jump" },
+    { hiragana: "おわる", kanji: "終わる", meaning: "to end/finish" },
+    { hiragana: "はじまる", kanji: "始まる", meaning: "to begin/start" },
+    { hiragana: "うたう", kanji: "歌う", meaning: "to sing" },
+    { hiragana: "おぼえる", kanji: "覚える", meaning: "to memorize/remember" },
+    { hiragana: "わすれる", kanji: "忘れる", meaning: "to forget" },
+    { hiragana: "だす", kanji: "出す", meaning: "to take out/submit" },
+    { hiragana: "くに", kanji: "国", meaning: "country" },
+    { hiragana: "まち", kanji: "町", meaning: "town" },
+    { hiragana: "むら", kanji: "村", meaning: "village" },
+    { hiragana: "やま", kanji: "山", meaning: "mountain" },
+    { hiragana: "かわ", kanji: "川", meaning: "river" },
+    { hiragana: "うみ", kanji: "海", meaning: "sea/ocean" },
+    { hiragana: "そら", kanji: "空", meaning: "sky" },
+    { hiragana: "き", kanji: "木", meaning: "tree/wood" },
+    { hiragana: "はな", kanji: "花", meaning: "flower" },
+    { hiragana: "いぬ", kanji: "犬", meaning: "dog" },
+    { hiragana: "ねこ", kanji: "猫", meaning: "cat" },
+    { hiragana: "さかな", kanji: "魚", meaning: "fish" },
+    { hiragana: "とり", kanji: "鳥", meaning: "bird" },
+    { hiragana: "どうぶつ", kanji: "動物", meaning: "animal" },
+    { hiragana: "たべもの", kanji: "食べ物", meaning: "food" },
+    { hiragana: "のみもの", kanji: "飲み物", meaning: "drink" },
+    { hiragana: "くだもの", kanji: "果物", meaning: "fruit" },
+    { hiragana: "やさい", kanji: "野菜", meaning: "vegetable" },
+    { hiragana: "にく", kanji: "肉", meaning: "meat" },
+    { hiragana: "おかね", kanji: "お金", meaning: "money" },
+    { hiragana: "て", kanji: "手", meaning: "hand/arm" },
+    { hiragana: "あし", kanji: "足", meaning: "foot/leg" },
+    { hiragana: "め", kanji: "目", meaning: "eye" },
+    { hiragana: "みみ", kanji: "耳", meaning: "ear" },
+    { hiragana: "くち", kanji: "口", meaning: "mouth" },
+    { hiragana: "はな", kanji: "鼻", meaning: "nose" },
+    { hiragana: "あたま", kanji: "頭", meaning: "head" },
+    { hiragana: "かみ", kanji: "髪", meaning: "hair" },
+    { hiragana: "からだ", kanji: "体", meaning: "body" },
+    { hiragana: "こころ", kanji: "心", meaning: "heart/mind/spirit" },
+    { hiragana: "もんだい", kanji: "問題", meaning: "problem/question" },
+    { hiragana: "こたえ", kanji: "答え", meaning: "answer" },
+    { hiragana: "しごと", kanji: "仕事", meaning: "work/job" },
+    { hiragana: "てがみ", kanji: "手紙", meaning: "letter" },
+    { hiragana: "でんわ", kanji: "電話", meaning: "telephone/phone call" },
+    { hiragana: "うた", kanji: "歌", meaning: "song" },
+    { hiragana: "え", kanji: "絵", meaning: "picture/drawing" },
+    { hiragana: "えいが", kanji: "映画", meaning: "movie" },
+    { hiragana: "おんがく", kanji: "音楽", meaning: "music" },
+    { hiragana: "りょこう", kanji: "旅行", meaning: "travel/trip" },
+    { hiragana: "しゃしん", kanji: "写真", meaning: "photograph" },
+    { hiragana: "くすり", kanji: "薬", meaning: "medicine" },
+    { hiragana: "ふく", kanji: "服", meaning: "clothes" },
+    { hiragana: "くつ", kanji: "靴", meaning: "shoes" },
+    { hiragana: "かばん", kanji: "鞄", meaning: "bag" },
+    { hiragana: "さいふ", kanji: "財布", meaning: "wallet/purse" },
+    { hiragana: "かぎ", kanji: "鍵", meaning: "key" },
+    { hiragana: "とけい", kanji: "時計", meaning: "watch/clock" },
+    { hiragana: "しんぶん", kanji: "新聞", meaning: "newspaper" },
+    { hiragana: "ざっし", kanji: "雑誌", meaning: "magazine" },
+    { hiragana: "あかい", kanji: "赤い", meaning: "red" },
+    { hiragana: "あおい", kanji: "青い", meaning: "blue" },
+    { hiragana: "くろい", kanji: "黒い", meaning: "black" },
+    { hiragana: "しろい", kanji: "白い", meaning: "white" },
+    { hiragana: "きいろい", kanji: "黄色い", meaning: "yellow" },
+    { hiragana: "ちゃいろい", kanji: "茶色い", meaning: "brown" },
+    { hiragana: "みじかい", kanji: "短い", meaning: "short (length)" },
+    { hiragana: "ながい", kanji: "長い", meaning: "long" },
+    { hiragana: "おもい", kanji: "重い", meaning: "heavy" },
+    { hiragana: "かるい", kanji: "軽い", meaning: "light (weight)" },
+    { hiragana: "くらい", kanji: "暗い", meaning: "dark" },
+    { hiragana: "あかるい", kanji: "明るい", meaning: "bright" },
+    { hiragana: "せまい", kanji: "狭い", meaning: "narrow" },
+    { hiragana: "ひろい", kanji: "広い", meaning: "wide/spacious" },
+    { hiragana: "すき", kanji: "好き", meaning: "likeable (na-adj)" },
+    { hiragana: "きらい", kanji: "嫌い", meaning: "dislikeable (na-adj)" },
+    { hiragana: "じょうず", kanji: "上手", meaning: "skillful/good at (na-adj)" },
+    { hiragana: "へた", kanji: "下手", meaning: "unskillful/bad at (na-adj)" },
+    { hiragana: "しずか", kanji: "静か", meaning: "quiet (na-adj)" },
+    { hiragana: "にぎやか", kanji: "賑やか", meaning: "lively/bustling (na-adj)" },
+    { hiragana: "きれい", kanji: "綺麗", meaning: "beautiful/clean (na-adj)" },
+    { hiragana: "ゆうめい", kanji: "有名", meaning: "famous (na-adj)" },
+    { hiragana: "しんせつ", kanji: "親切", meaning: "kind (na-adj)" },
+    { hiragana: "ひま", kanji: "暇", meaning: "free/not busy (na-adj)" },
+    { hiragana: "べんり", kanji: "便利", meaning: "convenient (na-adj)" },
+    { hiragana: "わたし", kanji: "私", meaning: "I/me" },
+    { hiragana: "あなた", kanji: "貴方", meaning: "you" },
+    { hiragana: "かれ", kanji: "彼", meaning: "he/him/boyfriend" },
+    { hiragana: "かのじょ", kanji: "彼女", meaning: "she/her/girlfriend" },
+    { hiragana: "これ", kanji: "此れ", meaning: "this (thing here)" },
+    { hiragana: "それ", kanji: "其れ", meaning: "that (thing near listener)" },
+    { hiragana: "あれ", kanji: "彼れ", meaning: "that (thing over there)" },
+    { hiragana: "どれ", kanji: "何れ", meaning: "which (of three or more)" },
+    { hiragana: "この", kanji: "此の", meaning: "this (modifies noun)" },
+    { hiragana: "その", kanji: "其の", meaning: "that (modifies noun, near listener)" },
+    { hiragana: "あの", kanji: "彼の", meaning: "that (modifies noun, over there)" },
+    { hiragana: "どの", kanji: "何の", meaning: "which (modifies noun)" },
+    { hiragana: "ここ", kanji: "此処", meaning: "here" },
+    { hiragana: "そこ", kanji: "其処", meaning: "there (near listener)" },
+    { hiragana: "あそこ", kanji: "彼処", meaning: "over there" },
+    { hiragana: "どこ", kanji: "何処", meaning: "where" },
+    { hiragana: "とても", kanji: "迚も", meaning: "very" },
+    { hiragana: "すこし", kanji: "少し", meaning: "a little/a few" },
+    { hiragana: "たくさん", kanji: "沢山", meaning: "many/a lot" },
+    { hiragana: "よく", kanji: "良く", meaning: "often/well" },
+    { hiragana: "ゆっくり", kanji: "ゆっくり", meaning: "slowly" },
+    { hiragana: "まっすぐ", kanji: "真っ直ぐ", meaning: "straight" },
+    { hiragana: "いっしょに", kanji: "一緒に", meaning: "together" },
+    { hiragana: "いつも", kanji: "何時も", meaning: "always" },
+    { hiragana: "たぶん", kanji: "多分", meaning: "probably/maybe" },
+    { hiragana: "もう", kanji: "もう", meaning: "already/now/soon/more" },
+    { hiragana: "まだ", kanji: "未だ", meaning: "still/not yet" },
+    { hiragana: "これから", kanji: "これから", meaning: "from now on" },
+    { hiragana: "どうして", kanji: "如何して", meaning: "why" },
+    { hiragana: "なぜ", kanji: "何故", meaning: "why" },
+    { hiragana: "いちばん", kanji: "一番", meaning: "number one/the most" },
+    { hiragana: "あとで", kanji: "後で", meaning: "later" },
+    { hiragana: "たいてい", kanji: "大抵", meaning: "usually/mostly" },
+    { hiragana: "ときどき", kanji: "時々", meaning: "sometimes" },
+    { hiragana: "ぜんぶ", kanji: "全部", meaning: "all/entirely" },
+    { hiragana: "ひとつ", kanji: "一つ", meaning: "one thing (general counter)" },
+    { hiragana: "ふたつ", kanji: "二つ", meaning: "two things (general counter)" },
+    { hiragana: "みっつ", kanji: "三つ", meaning: "three things (general counter)" },
+    { hiragana: "よっつ", kanji: "四つ", meaning: "four things (general counter)" },
+    { hiragana: "いつつ", kanji: "五つ", meaning: "five things (general counter)" },
+    { hiragana: "ひとり", kanji: "一人", meaning: "one person" },
+    { hiragana: "ふたり", kanji: "二人", meaning: "two people" },
+    { hiragana: "なんにん", kanji: "何人", meaning: "how many people" },
+    { hiragana: "いくつ", kanji: "幾つ", meaning: "how many/how old" },
+    { hiragana: "かぜ", kanji: "風", meaning: "wind" },
+    { hiragana: "はれ", kanji: "晴れ", meaning: "clear weather" },
+    { hiragana: "くもり", kanji: "曇り", meaning: "cloudy weather" },
+    { hiragana: "ちず", kanji: "地図", meaning: "map" },
+    { hiragana: "えんぴつ", kanji: "鉛筆", meaning: "pencil" },
+    { hiragana: "かさ", kanji: "傘", meaning: "umbrella" },
+    { hiragana: "びょうき", kanji: "病気", meaning: "illness/sickness" },
+    { hiragana: "いみ", kanji: "意味", meaning: "meaning" },
+    { hiragana: "ことば", kanji: "言葉", meaning: "word/language" },
+    { hiragana: "じしょ", kanji: "辞書", meaning: "dictionary" },
+    { hiragana: "りゆう", kanji: "理由", meaning: "reason" },
+    { hiragana: "けいさつ", kanji: "警察", meaning: "police" },
+    { hiragana: "こうばん", kanji: "交番", meaning: "police box" },
+    { hiragana: "どうろ", kanji: "道路", meaning: "road" },
+    { hiragana: "はし", kanji: "橋", meaning: "bridge" },
+    { hiragana: "にわ", kanji: "庭", meaning: "garden/yard" },
+    { hiragana: "いけ", kanji: "池", meaning: "pond" },
+    { hiragana: "としょかん", kanji: "図書館", meaning: "library" },
+    { hiragana: "びじゅつかん", kanji: "美術館", meaning: "art museum" },
+    { hiragana: "たいしかん", kanji: "大使館", meaning: "embassy" },
+    { hiragana: "うけつけ", kanji: "受付", meaning: "reception desk" },
+    { hiragana: "かいぎ", kanji: "会議", meaning: "meeting/conference" },
+    { hiragana: "しけん", kanji: "試験", meaning: "exam/test" },
+    { hiragana: "しゅくだい", kanji: "宿題", meaning: "homework" },
+    { hiragana: "じゅぎょう", kanji: "授業", meaning: "class/lesson" },
+    { hiragana: "よてい", kanji: "予定", meaning: "plan/schedule" },
+    { hiragana: "おふろ", kanji: "お風呂", meaning: "bath" },
+    { hiragana: "げんかん", kanji: "玄関", meaning: "entranceway/foyer" },
+    { hiragana: "だいどころ", kanji: "台所", meaning: "kitchen" },
+    { hiragana: "おてあらい", kanji: "お手洗い", meaning: "toilet/restroom" },
+    { hiragana: "と", kanji: "戸", meaning: "door (Japanese style)" },
+    { hiragana: "きる", kanji: "切る", meaning: "to cut" },
+    { hiragana: "しぬ", kanji: "死ぬ", meaning: "to die" },
+    { hiragana: "なおす", kanji: "治す／直す", meaning: "to cure/repair" },
+    { hiragana: "こわれる", kanji: "壊れる", meaning: "to be broken" },
+    { hiragana: "なくす", kanji: "無くす", meaning: "to lose (something)" },
+    { hiragana: "みつける", kanji: "見つける", meaning: "to find" },
+    { hiragana: "てつだう", kanji: "手伝う", meaning: "to help" },
+    { hiragana: "よぶ", kanji: "呼ぶ", meaning: "to call/invite" },
+    { hiragana: "はらう", kanji: "払う", meaning: "to pay" },
+    { hiragana: "うける", kanji: "受ける", meaning: "to receive/take (exam)" },
+    { hiragana: "わたす", kanji: "渡す", meaning: "to hand over" },
+    { hiragana: "わたる", kanji: "渡る", meaning: "to cross over" },
+    { hiragana: "まがる", kanji: "曲がる", meaning: "to turn (corner)" },
+    { hiragana: "とまる", kanji: "止まる", meaning: "to stop (intransitive)" },
+    { hiragana: "とめる", kanji: "止める", meaning: "to stop (something, transitive)" },
+    { hiragana: "おす", kanji: "押す", meaning: "to push" },
+    { hiragana: "ひく", kanji: "引く", meaning: "to pull/subtract" },
+    { hiragana: "すてる", kanji: "捨てる", meaning: "to throw away" },
+    { hiragana: "ひろう", kanji: "拾う", meaning: "to pick up" },
+    { hiragana: "しんぱいする", kanji: "心配する", meaning: "to worry" },
+    { hiragana: "あんしんする", kanji: "安心する", meaning: "to be relieved" },
+    { hiragana: "つかれる", kanji: "疲れる", meaning: "to get tired" },
+    { hiragana: "がんばる", kanji: "頑張る", meaning: "to do one's best/persevere" },
+    { hiragana: "おどろく", kanji: "驚く", meaning: "to be surprised" },
+    { hiragana: "きめる", kanji: "決める", meaning: "to decide" },
+    { hiragana: "けしき", kanji: "景色", meaning: "scenery/view" },
+    { hiragana: "おと", kanji: "音", meaning: "sound/noise" },
+    { hiragana: "こえ", kanji: "声", meaning: "voice" },
+    { hiragana: "あじ", kanji: "味", meaning: "taste/flavor" },
+    { hiragana: "におい", kanji: "匂い", meaning: "smell/fragrance" },
+    { hiragana: "かたち", kanji: "形", meaning: "shape/form" },
+    { hiragana: "いろ", kanji: "色", meaning: "color" },
+    { hiragana: "たいせつ", kanji: "大切", meaning: "important (na-adj)" },
+    { hiragana: "じょうぶ", kanji: "丈夫", meaning: "strong/healthy/durable (na-adj)" },
+    { hiragana: "あんぜん", kanji: "安全", meaning: "safety/security (na-adj)" },
+    { hiragana: "きけん", kanji: "危険", meaning: "danger/risk (na-adj)" },
+    { hiragana: "へん", kanji: "変", meaning: "strange/unusual (na-adj)" },
+    { hiragana: "じゆう", kanji: "自由", meaning: "freedom (na-adj)" },
+    { hiragana: "けいけん", kanji: "経験", meaning: "experience" },
+    { hiragana: "しゅうかん", kanji: "習慣", meaning: "custom/habit" },
+    { hiragana: "ぶんか", kanji: "文化", meaning: "culture" },
+    { hiragana: "しゃかい", kanji: "社会", meaning: "society" },
+    { hiragana: "けいざい", kanji: "経済", meaning: "economy/economics" },
+    { hiragana: "せいじ", kanji: "政治", meaning: "politics" },
+    { hiragana: "ほうりつ", kanji: "法律", meaning: "law" },
+    { hiragana: "せんそう", kanji: "戦争", meaning: "war" },
+    { hiragana: "へいわ", kanji: "平和", meaning: "peace" },
+    { hiragana: "ゆめ", kanji: "夢", meaning: "dream" },
+    { hiragana: "きもち", kanji: "気持ち", meaning: "feeling/mood" },
+    { hiragana: "かんがえ", kanji: "考え", meaning: "thought/idea" },
+    { hiragana: "れきし", kanji: "歴史", meaning: "history" },
+    { hiragana: "きょうみ", kanji: "興味", meaning: "interest (in something)" },
+    { hiragana: "じゅんび", kanji: "準備", meaning: "preparation" },
+    { hiragana: "やくそく", kanji: "約束", meaning: "promise/appointment" },
+    { hiragana: "ようじ", kanji: "用事", meaning: "errand/things to do" },
+    { hiragana: "りょかん", kanji: "旅館", meaning: "Japanese inn" },
+    { hiragana: "くうこう", kanji: "空港", meaning: "airport" },
+    { hiragana: "こうえん", kanji: "公園", meaning: "park" },
+    { hiragana: "どうぶつえん", kanji: "動物園", meaning: "zoo" },
+    { hiragana: "しやくしょ", kanji: "市役所", meaning: "city hall" },
+    { hiragana: "びょういん", kanji: "病院", meaning: "hospital" },
+    { hiragana: "きょうしつ", kanji: "教室", meaning: "classroom" },
+    { hiragana: "かいだん", kanji: "階段", meaning: "stairs" },
+    { hiragana: "エレベーター", kanji: "エレベーター", meaning: "elevator" },
+    { hiragana: "エスカレーター", kanji: "エスカレーター", meaning: "escalator" },
+    { hiragana: "かど", kanji: "角", meaning: "corner" },
+    { hiragana: "しんごう", kanji: "信号", meaning: "traffic light" },
+    { hiragana: "きた", kanji: "北", meaning: "north" },
+    { hiragana: "みなみ", kanji: "南", meaning: "south" },
+    { hiragana: "ひがし", kanji: "東", meaning: "east" },
+    { hiragana: "にし", kanji: "西", meaning: "west" },
+    { hiragana: "みぎ", kanji: "右", meaning: "right" },
+    { hiragana: "ひだり", kanji: "左", meaning: "left" },
+    { hiragana: "うえ", kanji: "上", meaning: "up/above/on" },
+    { hiragana: "した", kanji: "下", meaning: "down/below/under" },
+    { hiragana: "つづける", kanji: "続ける", meaning: "to continue" },
+    { hiragana: "やめる", kanji: "辞める", meaning: "to quit/resign" },
+    { hiragana: "さがす", kanji: "探す", meaning: "to search for/look for" },
+    { hiragana: "おくれる", kanji: "遅れる", meaning: "to be late" },
+    { hiragana: "まにあう", kanji: "間に合う", meaning: "to be on time" },
+    { hiragana: "えらぶ", kanji: "選ぶ", meaning: "to choose/select" },
+    { hiragana: "はこぶ", kanji: "運ぶ", meaning: "to carry/transport" },
+    { hiragana: "なおる", kanji: "治る／直る", meaning: "to be cured/repaired (intransitive)" },
+    { hiragana: "たすける", kanji: "助ける", meaning: "to help/save (someone)" },
+    { hiragana: "しらべる", kanji: "調べる", meaning: "to investigate/check" },
+    { hiragana: "さわる", kanji: "触る", meaning: "to touch" },
+    { hiragana: "いのる", kanji: "祈る", meaning: "to pray" },
+    { hiragana: "ふえる", kanji: "増える", meaning: "to increase (intransitive)" },
+    { hiragana: "へる", kanji: "減る", meaning: "to decrease (intransitive)" },
+    { hiragana: "うごく", kanji: "動く", meaning: "to move" },
+    { hiragana: "こまる", kanji: "困る", meaning: "to be troubled/in difficulty" },
+    { hiragana: "こむ", kanji: "込む", meaning: "to be crowded" },
+    { hiragana: "すく", kanji: "空く", meaning: "to become empty/less crowded" },
+    { hiragana: "きょうみをもつ", kanji: "興味を持つ", meaning: "to have an interest" },
+    { hiragana: "いきる", kanji: "生きる", meaning: "to live/exist" },
+    { hiragana: "うまれる", kanji: "生まれる", meaning: "to be born" },
+    { hiragana: "やくにたつ", kanji: "役に立つ", meaning: "to be useful" },
+    { hiragana: "かざる", kanji: "飾る", meaning: "to decorate" },
+    { hiragana: "くらべる", kanji: "比べる", meaning: "to compare" },
+    { hiragana: "むかえる", kanji: "迎える", meaning: "to welcome/greet/meet" },
+    { hiragana: "ふべん", kanji: "不便", meaning: "inconvenient (na-adj)" },
+    { hiragana: "ふあん", kanji: "不安", meaning: "uneasy/anxious (na-adj)" },
+    { hiragana: "ていねい", kanji: "丁寧", meaning: "polite (na-adj)" },
+    { hiragana: "ざんねん", kanji: "残念", meaning: "regrettable/disappointing (na-adj)" },
+    { hiragana: "うれしい", kanji: "嬉しい", meaning: "happy/glad (i-adj)" },
+    { hiragana: "かなしい", kanji: "悲しい", meaning: "sad (i-adj)" },
+    { hiragana: "さびしい", kanji: "寂しい", meaning: "lonely/sad (i-adj)" },
+    { hiragana: "ねむい", kanji: "眠い", meaning: "sleepy (i-adj)" },
+    { hiragana: "いたい", kanji: "痛い", meaning: "painful (i-adj)" },
+    { hiragana: "かゆい", kanji: "痒い", meaning: "itchy (i-adj)" },
+    { hiragana: "まず", kanji: "先ず", meaning: "first of all/to begin with (adv)" },
+    { hiragana: "つぎに", kanji: "次に", meaning: "next/then (adv)" },
+    { hiragana: "さいごに", kanji: "最後に", meaning: "finally/lastly (adv)" },
+    { hiragana: "しっかり", kanji: "しっかり", meaning: "firmly/securely/reliably (adv)" },
+    { hiragana: "ちゃんと", kanji: "ちゃんと", meaning: "properly (adv)" },
+    { hiragana: "きっと", kanji: "屹度", meaning: "surely/certainly (adv)" },
+    { hiragana: "もし", kanji: "若し", meaning: "if/in case (adv)" },
+    { hiragana: "もちろん", kanji: "勿論", meaning: "of course/certainly (adv)" },
+    { hiragana: "とくに", kanji: "特に", meaning: "especially/particularly (adv)" },
+    { hiragana: "だんだん", kanji: "段々", meaning: "gradually/little by little (adv)" },
+    { hiragana: "やっと", kanji: "やっと", meaning: "finally/at last (adv)" },
+    { hiragana: "ずいぶん", kanji: "随分", meaning: "considerably/very (adv)" },
+    { hiragana: "なかなか", kanji: "中々", meaning: "quite/considerably/not easily (adv)" },
+    { hiragana: "だいたい", kanji: "大体", meaning: "mostly/generally/approximately (adv)" },
+    { hiragana: "いそいで", kanji: "急いで", meaning: "hurriedly/in a hurry (adv)" }
+                ]
+            }
+        };
+
+        const scores = {
+            hiragana: { correct: 0, total: 0 },
+            katakana: { correct: 0, total: 0 },
+            numbers: { correct: 0, total: 0 },
+            words: { correct: 0, total: 0 }
+        };
+
+        let currentMode = 'hiragana';
+        let activeDataset = datasets[currentMode].data;
+        let currentCardData = null;
+        const NUMBER_OF_CHOICES = 8;
+
+        const questionView = document.getElementById('question-view');
+        const feedbackView = document.getElementById('feedback-view');
+        const itemDisplay = document.getElementById('item-display');
+        const choicesContainer = document.getElementById('choices-container');
+        const feedbackMessage = document.getElementById('feedback-message');
+        const correctAnswerDisplay = document.getElementById('correct-answer-display');
+        const exampleWordsContainer = document.getElementById('example-words-container');
+        const exampleWordsList = document.getElementById('example-words-list');
+        const nextButton = document.getElementById('next-button');
+        const questionTitle = document.getElementById('question-title');
+        const japaneseWritingDisplay = document.getElementById('japanese-writing-display');
+
+        const navButtons = {
+            hiragana: document.getElementById('nav-hiragana'),
+            katakana: document.getElementById('nav-katakana'),
+            numbers: document.getElementById('nav-numbers'),
+            words: document.getElementById('nav-words')
+        };
+
+        const scoreDisplayElements = {
+            hiragana: document.getElementById('score-hiragana'),
+            katakana: document.getElementById('score-katakana'),
+            numbers: document.getElementById('score-numbers'),
+            words: document.getElementById('score-words')
+        };
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function updateAllScoreDisplays() {
+            for (const modeKey in scores) {
+                if (scores.hasOwnProperty(modeKey) && datasets.hasOwnProperty(modeKey) && scoreDisplayElements.hasOwnProperty(modeKey)) {
+                    const s = scores[modeKey];
+                    const percentage = s.total > 0 ? ((s.correct / s.total) * 100).toFixed(0) : 0;
+                    scoreDisplayElements[modeKey].textContent = `${datasets[modeKey].name}: ${s.correct}/${s.total} (${percentage}%)`;
+                }
+            }
+        }
+
+        function setActiveNavButton() {
+            Object.values(navButtons).forEach(btn => btn.classList.remove('active'));
+            if (navButtons[currentMode]) {
+                navButtons[currentMode].classList.add('active');
+            }
+        }
+
+        function changeMode(newMode) {
+            if (!datasets[newMode]) return;
+            currentMode = newMode;
+            activeDataset = datasets[currentMode].data;
+            questionTitle.textContent = datasets[currentMode].questionLabel;
+            setActiveNavButton();
+            updateAllScoreDisplays();
+            displayNewCard();
+        }
+
+        function displayNewCard() {
+            feedbackView.classList.add('hidden');
+            questionView.classList.remove('hidden');
+            correctAnswerDisplay.textContent = '';
+            exampleWordsList.innerHTML = '';
+            exampleWordsContainer.classList.add('hidden');
+            japaneseWritingDisplay.textContent = '';
+            japaneseWritingDisplay.classList.add('hidden');
+
+            if (!activeDataset || activeDataset.length === 0) {
+                itemDisplay.innerHTML = `<span class="text-red-500">Error: No data for ${datasets[currentMode].name} mode. Please add items to the dataset.</span>`;
+                choicesContainer.innerHTML = "";
+                return;
+            }
+
+            const randomIndex = Math.floor(Math.random() * activeDataset.length);
+            currentCardData = activeDataset[randomIndex];
+
+            itemDisplay.innerHTML = '';
+            itemDisplay.className = '';
+
+            if (currentMode === 'numbers') {
+                itemDisplay.textContent = currentCardData.display;
+                itemDisplay.classList.add('number-display');
+            } else if (currentMode === 'words') {
+                const hiraganaSpan = document.createElement('span');
+                hiraganaSpan.textContent = currentCardData.hiragana;
+                hiraganaSpan.classList.add('word-display-hiragana');
+                itemDisplay.appendChild(hiraganaSpan);
+
+                if (currentCardData.kanji && currentCardData.kanji.trim() !== "") {
+                    const kanjiSpan = document.createElement('span');
+                    kanjiSpan.textContent = ` (${currentCardData.kanji})`;
+                    kanjiSpan.classList.add('word-display-kanji');
+                    itemDisplay.appendChild(kanjiSpan);
+                }
+            } else {
+                itemDisplay.textContent = currentCardData.char;
+                itemDisplay.classList.add('japanese-char-display');
+            }
+
+            choicesContainer.className = '';
+            if (currentMode === 'words') {
+                // For "Words" mode, use 2 columns. This will create 4 rows for 8 answers.
+                choicesContainer.classList.add('grid', 'grid-cols-2', 'gap-3', 'sm:gap-4');
+            } else {
+                // For other modes, use the original responsive grid.
+                choicesContainer.classList.add('grid', 'grid-cols-2', 'sm:grid-cols-4', 'gap-3', 'sm:gap-4');
+            }
+
+            let correctAnswerValue = (currentMode === 'words') ? currentCardData.meaning : currentCardData.romaji;
+            let choices = [correctAnswerValue];
+            let allPossibleAnswers;
+
+            if (currentMode === 'words') {
+                allPossibleAnswers = activeDataset.map(item => item.meaning);
+            } else {
+                allPossibleAnswers = activeDataset.map(item => item.romaji);
+            }
+
+            let incorrectOptions = allPossibleAnswers.filter(ans => ans !== correctAnswerValue);
+            shuffleArray(incorrectOptions);
+
+            for (let i = 0; choices.length < NUMBER_OF_CHOICES && i < incorrectOptions.length; i++) {
+                if (!choices.includes(incorrectOptions[i])) {
+                    choices.push(incorrectOptions[i]);
+                }
+            }
+            while (choices.length < NUMBER_OF_CHOICES && activeDataset.length > 0) {
+                 const randomFallbackIndex = Math.floor(Math.random() * activeDataset.length);
+                 const randomFallbackValue = (currentMode === 'words') ? activeDataset[randomFallbackIndex].meaning : activeDataset[randomFallbackIndex].romaji;
+                 if (!choices.includes(randomFallbackValue)) {
+                    choices.push(randomFallbackValue);
+                 } else if (choices.length < NUMBER_OF_CHOICES) {
+                    choices.push(randomFallbackValue);
+                 }
+                 if (choices.length >= NUMBER_OF_CHOICES) break;
+            }
+            shuffleArray(choices);
+
+            choicesContainer.innerHTML = '';
+            choices.slice(0, NUMBER_OF_CHOICES).forEach(choiceText => {
+                const button = document.createElement('button');
+                button.textContent = choiceText;
+                button.classList.add('choice-button', 'bg-indigo-500', 'hover:bg-indigo-600', 'text-white', 'font-semibold', 'py-3', 'px-4', 'rounded-lg', 'shadow', 'w-full', 'text-md', 'sm:text-lg');
+                button.addEventListener('click', handleAnswerClick);
+                choicesContainer.appendChild(button);
+            });
+        }
+
+        function handleAnswerClick(event) {
+            const selectedAnswer = event.target.textContent;
+            let isCorrect;
+            let correctAnswerText;
+            let displayQuestionText;
+
+            if (currentMode === 'words') {
+                isCorrect = selectedAnswer === currentCardData.meaning;
+                correctAnswerText = currentCardData.meaning;
+                displayQuestionText = `${currentCardData.hiragana}${currentCardData.kanji ? ' (' + currentCardData.kanji + ')' : ''}`;
+            } else {
+                isCorrect = selectedAnswer === currentCardData.romaji;
+                correctAnswerText = currentCardData.romaji;
+                displayQuestionText = (currentMode === 'numbers') ? currentCardData.display : currentCardData.char;
+            }
+
+            scores[currentMode].total++;
+            if (isCorrect) {
+                scores[currentMode].correct++;
+            }
+            updateAllScoreDisplays();
+
+            questionView.classList.add('hidden');
+            feedbackView.classList.remove('hidden');
+
+            if (isCorrect) {
+                feedbackMessage.textContent = 'Correct! 🎉';
+                feedbackMessage.className = 'text-2xl sm:text-3xl font-bold mb-3 feedback-correct';
+                correctAnswerDisplay.textContent = '';
+            } else {
+                feedbackMessage.textContent = 'Not quite!';
+                feedbackMessage.className = 'text-2xl sm:text-3xl font-bold mb-3 feedback-incorrect';
+                correctAnswerDisplay.textContent = `The correct answer for "${displayQuestionText}" is "${correctAnswerText}".`;
+            }
+
+            if (currentMode === 'hiragana' || currentMode === 'katakana') {
+                exampleWordsList.innerHTML = '';
+                if (currentCardData.words && currentCardData.words.length > 0) {
+                    exampleWordsContainer.classList.remove('hidden');
+                    currentCardData.words.slice(0, 5).forEach(word => {
+                        const listItem = document.createElement('li');
+                        const charTypeKey = currentMode;
+                        const wordChar = word[charTypeKey] || (charTypeKey === 'hiragana' ? word.hiragana : word.katakana);
+                        listItem.innerHTML = `<span class="example-word-char font-semibold">${wordChar}</span> (${word.romaji}) - ${word.meaning}`;
+                        exampleWordsList.appendChild(listItem);
+                    });
+                } else {
+                    exampleWordsContainer.classList.add('hidden');
+                }
+                japaneseWritingDisplay.classList.add('hidden');
+            } else if (currentMode === 'numbers') {
+                exampleWordsContainer.classList.add('hidden');
+                if (currentCardData.japanese) {
+                    japaneseWritingDisplay.textContent = `Japanese: ${currentCardData.japanese}`;
+                    japaneseWritingDisplay.classList.remove('hidden');
+                }
+            } else {
+                exampleWordsContainer.classList.add('hidden');
+                japaneseWritingDisplay.classList.add('hidden');
+            }
+        }
+
+        Object.values(navButtons).forEach(button => {
+            button.addEventListener('click', (e) => changeMode(e.target.dataset.mode));
+        });
+        nextButton.addEventListener('click', displayNewCard);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            let allDataPresent = true;
+            for (const modeKey in datasets) {
+                if (!datasets[modeKey].data || datasets[modeKey].data.length === 0) {
+                    console.warn(`Warning: No data found for ${datasets[modeKey].name} mode.`);
+                    if (modeKey === currentMode) allDataPresent = false;
+                } else if (datasets[modeKey].data.length > 0 && datasets[modeKey].data.length < NUMBER_OF_CHOICES) {
+                    console.warn(`Warning: The ${datasets[modeKey].name} set has only ${datasets[modeKey].data.length} items, which is less than the ${NUMBER_OF_CHOICES} choices displayed. Choices may be heavily repeated or limited.`);
+                }
+            }
+
+            if (!allDataPresent && datasets[currentMode].data.length === 0) {
+                 document.getElementById('app-container').innerHTML = `<p class="text-red-500 text-center text-xl">Error: No learning data loaded for the initial mode (${datasets[currentMode].name}). Cannot start the app.</p>`;
+                return;
+            }
+
+            updateAllScoreDisplays();
+            changeMode(currentMode);
+        });
+    </script>
+
+</body>
+</html>
