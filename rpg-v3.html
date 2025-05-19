@@ -1,0 +1,1729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini MUD RPG</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        html, body, #main-container {
+            height: 100%;
+            margin: 0;
+            overflow: hidden; 
+        }
+        #main-container {
+            display: flex;
+            flex-direction: column; 
+        }
+        @media (min-width: 768px) { /* md breakpoint */
+            #main-container {
+                flex-direction: row;
+            }
+        }
+
+        #left-column {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1; 
+        }
+        #info-area {
+            overflow-y: auto; 
+            max-height: 100vh; 
+            flex-shrink: 0; 
+        }
+         @media (min-width: 768px) {
+            #left-column {
+                width: 66.666667%; 
+            }
+            #info-area {
+                width: 33.333333%; 
+            }
+         }
+         @media (max-width: 767px) { 
+            #left-column { order: 1; width: 100%; }
+            #info-area { order: 2; max-height: 50vh; width: 100%;}
+        }
+
+        #stats-header-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 0.5rem; 
+            padding: 0.5rem; 
+            background-color: #2D3748; /* gray-800 */
+            border-radius: 0.375rem; /* rounded-md */
+            margin-bottom: 0.5rem; 
+            flex-shrink: 0; 
+        }
+        .stats-column {
+            background-color: #4A5568; /* gray-700 */
+            padding: 0.5rem;
+            border-radius: 0.25rem; /* rounded-sm */
+        }
+        .stats-column h4 {
+            font-size: 0.875rem; font-weight: 600; 
+            color: #A0AEC0; /* gray-400 */
+            margin-bottom: 0.25rem; text-align: center;
+        }
+        #coins-display {
+            font-size: 1.25rem; font-weight: bold;
+            color: #F6E05E; /* yellow-400 */
+            text-align: center;
+        }
+        #player-info-button-container button, #open-player-screen-button { 
+            font-size: 1rem; font-weight: bold; 
+            color: #F6E05E; 
+            text-align: center;
+            background-color: #4A5568;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            width: 100%;
+            border: 1px solid #2D3748;
+        }
+        #player-info-button-container button:hover, #open-player-screen-button:hover {
+            background-color: #2D3748;
+            border-color: #4A5568;
+        }
+        #xp-bar-container .stat-bar { 
+            height: 0.75rem; 
+        }
+        #xp-bar-container .stat-bar-text {
+            line-height: 0.75rem;
+            font-size: 0.6rem;
+        }
+
+
+        #map-outer-container {
+            background-color: #2D3748; 
+            padding: 0.25rem; 
+            border-radius: 0.375rem; 
+            aspect-square: 1 / 1; 
+            max-width: 100%; 
+            margin-left: auto; margin-right: auto; 
+            flex-grow: 1; 
+            min-height: 0; 
+            display: flex; 
+            align-items: center;
+            justify-content: center;
+            position: relative; 
+        }
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr); 
+            grid-template-rows: repeat(9, 1fr);    
+            gap: 1px; 
+            width: 100%; 
+            height: 100%; 
+            border: 1px solid #4A5568; 
+        }
+        .map-cell {
+            background-color: #1A202C; border: 1px solid #2D3748; 
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center;
+            position: relative; overflow: visible; cursor: default;
+            font-size: 0.6rem; 
+        }
+        .player-marker { 
+            width: 10px; height: 10px;
+            background-color: yellow;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 6; 
+        }
+        .room-type-cave { background-color: #718096; } .room-type-road { background-color: #A0AEC0; }
+        .room-type-building { background-color: #ECC94B; color: #2D3748; } .room-type-forest { background-color: #48BB78; }
+        .room-type-desert { background-color: #FBD38D; color: #2D3748; } .room-type-jungle { background-color: #38A169; }
+        .room-type-tomb { background-color: #6B46C1; }
+
+        .map-cell.current-room { border: 2px solid #F6E05E; box-shadow: 0 0 8px #F6E05E; } 
+        .map-cell.clickable-room:hover { filter: brightness(1.2); cursor: pointer; }
+
+        .stair-quadrant {
+            position: absolute; width: 50%; height: 50%; display: flex;
+            align-items: center; justify-content: center; z-index: 5; 
+        }
+        .stair-quadrant svg { width: 80%; height: 80%; } 
+        .stair-up-quadrant { top: 0; left: 0; } .stair-down-quadrant { bottom: 0; right: 0; }
+        .stair-quadrant.clickable:hover { background-color: rgba(255, 255, 255, 0.15); cursor: pointer; }
+        
+        #exits-list a { color: #63B3ED; text-decoration: underline; cursor: pointer; }
+        #exits-list a:hover { color: #90CDF4; }
+
+        #room-description {
+            max-height: calc(6 * 1.5em); line-height: 1.5; overflow-y: auto;
+            flex-grow: 0; flex-shrink: 0; margin-bottom: 1rem; padding-right: 0.5rem; 
+        }
+        
+        #stats-panel { /* Inside a column in stats-header-container */ }
+        #inventory-panel, #ground-items-panel, #creatures-panel, #item-description-panel-main { 
+            margin-top: 1rem; padding-top: 0.5rem; border-top: 1px solid #4A5568;
+        }
+        .panel-header { 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .panel-header button {
+            background-color: #4A5568; color: #E2E8F0;
+            padding: 0.125rem 0.375rem; 
+            font-size: 0.75rem; 
+            border-radius: 0.25rem;
+        }
+        .panel-header button:hover { background-color: #2D3748; }
+        
+        .stat-bar-container { margin-bottom: 0.25rem; }
+        .stat-bar { 
+            background-color: #2D3748; 
+            border-radius: 0.25rem; height: 1.25rem; 
+            width: 100%; position: relative; overflow: hidden;
+        }
+        .stat-bar-inner {
+            position: absolute; top:0; left:0; height: 100%;
+            border-radius: 0.25rem; transition: width 0.3s ease-in-out;
+        }
+        .stat-bar-text {
+            position: absolute; width: 100%; text-align: center;
+            line-height: 1.25rem; font-size: 0.65rem; font-weight: bold;
+            color: #E2E8F0; text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+        }
+        .hp-bar { background-color: #E53E3E; } 
+        .enemy-hp-bar { background-color: #EF4444; } 
+        .move-bar { background-color: #48BB78; }
+        .mana-bar { background-color: #4299E1; } 
+        .hunger-bar { background-color: #D69E2E; }
+        .xp-bar { background-color: #A0AEC0; } 
+
+
+        #force-tick-button-r { 
+            background-color: #4A5568; color: #E2E8F0; 
+            padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer;
+            font-size: 0.875rem; font-weight: bold;
+            margin-right: 0.5rem; line-height: 1; 
+        }
+        #force-tick-button-r:hover { background-color: #2D3748; }
+        #room-title-container { display: flex; align-items: center; }
+
+        .item-grid {
+            display: grid; gap: 4px; padding: 4px;
+            background-color: #2D3748; border-radius: 0.25rem;
+            overflow-x: hidden; 
+        }
+        #inventory-grid, #shop-wares-grid, #combat-inventory-grid, #player-screen-inventory-grid, #ground-items-grid, #shop-player-inventory-grid { 
+             grid-template-columns: repeat(5, 1fr); 
+        }
+        #inventory-grid-container, #ground-items-grid-container, #player-screen-inventory-container, #combat-inventory-grid-container, #shop-player-inventory-container {
+            max-height: calc(3 * (2.5rem + 4px) + 8px); 
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        #inventory-grid, #ground-items-grid, #player-screen-inventory-grid, #combat-inventory-grid, #shop-player-inventory-grid {
+            /* Rows will be added dynamically by content */
+        }
+
+
+        #creatures-list { list-style: none; padding-left: 0; }
+        #creatures-list li {
+            background-color: #2D3748; padding: 0.5rem; border-radius: 0.25rem; margin-bottom: 0.25rem;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        #creatures-list button { 
+             background-color: #E53E3E; color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem;
+        }
+
+        .item-slot {
+            background-color: #4A5568; border: 1px solid #718096; border-radius: 0.25rem;
+            min-height: 2.5rem; display: flex; align-items: center; justify-content: center;
+            font-size: 1.25rem; cursor: default; 
+            position: relative; 
+        }
+        .item-slot:hover { border-color: #90CDF4; }
+        
+        .item-slot .item-visual-container { 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .item-slot .item-tooltip { 
+            visibility: hidden; width: max-content; background-color: #1A202C; color: #fff;
+            text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute;
+            z-index: 20; bottom: 125%; left: 50%; transform: translateX(-50%);
+            font-size: 0.75rem; white-space: nowrap; pointer-events: none; 
+        }
+        .item-slot:hover .item-tooltip { visibility: visible; }
+
+        .item-actions-palette {
+            position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);
+            background-color: #1A202C; border: 1px solid #4A5568; 
+            border-radius: 0.25rem; padding: 2px; display: flex; gap: 2px;
+            z-index: 15; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .item-actions-palette button {
+            background-color: #2D3748; color: #E2E8F0; border: 1px solid #4A5568; 
+            padding: 2px 5px; font-size: 0.75rem; border-radius: 0.125rem; 
+            cursor: pointer; white-space: nowrap;
+        }
+        .item-actions-palette button:hover { background-color: #4A5568; border-color: #63B3ED; }
+
+        #message-area { flex-shrink: 0; margin-top: 0.5rem; }
+
+        /* Modal General Styles */
+        .modal-overlay {
+            position: fixed; /* Changed to fixed for full screen overlay */
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(10, 10, 20, 0.9); 
+            display: none; 
+            align-items: center; justify-content: center;
+            z-index: 1000;
+            overflow: hidden; 
+        }
+        .modal-screen {
+            background-color: #1A202C; 
+            color: #E2E8F0; 
+            padding: 1rem; 
+            border-radius: 0.5rem; 
+            width: 90%; /* Adjusted for full screen modal content */
+            max-width: 800px; /* Max width for larger modals */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column;
+            height: 90%; 
+            max-height: 800px; /* Max height for larger modals */
+            position: relative; 
+        }
+        .modal-close-button {
+            position: absolute;
+            top: 0.5rem; right: 0.5rem;
+            background-color: #E53E3E; 
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 2rem; height: 2rem;
+            font-size: 1.25rem; line-height: 1.8rem; 
+            text-align: center;
+            cursor: pointer;
+            z-index: 1001;
+        }
+        .modal-close-button:hover { background-color: #C53030; }
+
+        /* Player Screen Modal (Full screen) */
+        #player-screen-content { 
+             width: 90%; max-width: 900px; 
+             height: 90%; max-height: 700px;
+             display: grid;
+             grid-template-columns: 1fr 1fr; 
+             gap: 1rem;
+        }
+        #player-wearing-panel { grid-column: 1 / 2; }
+        #player-screen-right-panel { grid-column: 2 / 3; display: flex; flex-direction: column; gap: 1rem;}
+        #player-screen-stats, #player-screen-details, #player-screen-inventory-panel {
+            background-color: #2D3748; padding: 0.75rem; border-radius: 0.375rem;
+        }
+        #player-screen-details p { margin-bottom: 0.25rem; }
+
+        .equipment-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); 
+            grid-template-rows: auto; 
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .equipment-slot {
+            border: 1px dashed #718096; 
+            min-height: 3.5rem; 
+            display: flex;
+            flex-direction: column; 
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem;
+            text-align: center;
+            font-size: 1.5rem; 
+            position: relative;
+        }
+        .equipment-slot-label {
+            font-size: 0.7rem;
+            color: #A0AEC0; 
+            margin-bottom: 0.25rem;
+        }
+        .equipment-slot .item-slot-visual { 
+            min-height: 2.5rem; 
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Combat Modal Specifics */
+        #combat-screen { /* Uses .modal-screen for base, override if needed */
+        }
+        #combat-stats-header-placeholder { 
+            margin-bottom: 1rem;
+            flex-shrink: 0;
+        }
+        #combat-monsters-list { margin-bottom: 0.5rem; flex-shrink: 0; }
+        #combat-monsters-list h4 { font-size: 1.125rem; margin-bottom: 0.25rem; color: #F56565; }
+        .combat-monster-entry { 
+            margin-bottom: 0.5rem; 
+            display: flex; 
+            /* justify-content: space-between; /* Removed to allow name to grow */
+            align-items: center; 
+        } 
+        .combat-monster-name { 
+            font-size: 1rem; 
+            margin-left: 0.5rem; /* Space after HP bar */
+            flex-grow: 1; 
+            text-align: left; /* Justify name left */
+        }
+        .combat-monster-hp-bar-container { /* Container for the bar itself */
+            width: 8rem; /* Tailwind w-32 */
+            flex-shrink: 0; /* Prevent it from shrinking */
+        }
+        .combat-monster-hp-bar-container .stat-bar { /* The actual bar */
+            width: 100%; /* Fill its container */
+        }
+
+
+        #combat-log {
+            height: calc(4 * 1.4em); 
+            line-height: 1.4;
+            overflow-y: auto;
+            background-color: #2D3748; border: 1px solid #4A5568; 
+            padding: 0.5rem; margin-bottom: 0.5rem; 
+            font-size: 0.875rem; border-radius: 0.25rem;
+        }
+        #combat-log p { margin-bottom: 0.25rem; }
+        #combat-actions { margin-bottom: 0.5rem; flex-shrink: 0; }
+        #combat-actions button {
+            background-color: #48BB78; 
+            color: white; padding: 0.5rem 1rem; border-radius: 0.25rem;
+            margin-right: 0.5rem;
+        }
+        #combat-actions button:hover { background-color: #38A169; }
+        #combat-auto-button { background-color: #4299E1; }
+        #combat-auto-button:hover { background-color: #3182CE; }
+
+        #combat-inventory-panel { margin-top: 0.5rem; flex-shrink: 0; }
+        #combat-inventory-panel h4 { margin-bottom: 0.25rem; }
+        #combat-inventory-grid-container { 
+             max-height: calc(3 * (2.5rem + 4px) + 8px); 
+             overflow-y: auto;
+             overflow-x: hidden;
+        }
+        
+        #close-combat-button { background-color: #718096; }
+        #close-combat-button:hover { background-color: #4A5568; }
+        #restart-game-button { background-color: #E53E3E; }
+
+        /* Shop Modal Specifics */
+        #shop-screen h3 { font-size: 1.5rem; margin-bottom: 1rem; text-align: center; color: #ECC94B; }
+        #shop-wares-container { flex-grow: 1; overflow-y: auto; margin-bottom: 1rem;}
+        #shop-player-inventory-panel { margin-top: 1rem; } 
+        #player-gold-shop-display { text-align: center; margin-top: 1rem; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+  <div id="main-container" class="p-2 sm:p-4 gap-2 sm:gap-4">
+    <div id="left-column" class="flex-1 flex flex-col gap-2 sm:gap-4 md:w-2/3">
+        <div id="stats-header-container">
+            <div id="player-stats-column" class="stats-column">
+                <h4>Player Stats</h4>
+                <div id="stats-panel">
+                    <div class="stat-bar-container"><div class="stat-bar"><div id="hp-bar-inner" class="stat-bar-inner hp-bar"></div><div id="hp-bar-text" class="stat-bar-text"></div></div></div>
+                    <div class="stat-bar-container"><div class="stat-bar"><div id="move-bar-inner" class="stat-bar-inner move-bar"></div><div id="move-bar-text" class="stat-bar-text"></div></div></div>
+                    <div class="stat-bar-container"><div class="stat-bar"><div id="mana-bar-inner" class="stat-bar-inner mana-bar"></div><div id="mana-bar-text" class="stat-bar-text"></div></div></div>
+                    <div class="stat-bar-container"><div class="stat-bar"><div id="hunger-bar-inner" class="stat-bar-inner hunger-bar"></div><div id="hunger-bar-text" class="stat-bar-text"></div></div></div>
+                </div>
+            </div>
+            <div id="coins-column" class="stats-column">
+                <h4>Wealth</h4>
+                <div id="coins-display">0 G</div>
+            </div>
+            <div id="future-stats-column" class="stats-column">
+                <h4>Player Info</h4>
+                <div id="player-info-button-container">
+                    <button id="open-player-screen-button">Player</button>
+                </div>
+                <div id="xp-bar-container" class="mt-2">
+                     <div class="stat-bar">
+                        <div id="xp-bar-inner" class="stat-bar-inner xp-bar"></div>
+                        <div id="xp-bar-text" class="stat-bar-text">XP</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="map-outer-container" class="bg-gray-800 p-1 sm:p-2 rounded-lg shadow-xl aspect-square max-w-full mx-auto flex-grow min-h-0">
+            <div id="map-container" class="map-grid"></div>
+            </div>
+        
+        <div id="message-area" class="h-8 text-center text-sm text-yellow-400"></div>
+    </div>
+
+    <div id="info-area" class="md:w-1/3 bg-gray-800 p-3 sm:p-4 rounded-lg shadow-xl flex flex-col">
+        <div id="room-title-container">
+            <button id="force-tick-button-r" title="Force Game Tick">R</button>
+            <h2 id="room-title" class="text-xl sm:text-2xl font-bold text-yellow-400 flex-grow"></h2>
+        </div>
+        <p id="room-description" class="text-sm sm:text-base text-gray-300 whitespace-pre-wrap leading-normal mt-2"></p>
+        
+        <div id="room-exits" class="mt-2"> 
+            <h3 class="text-lg font-semibold text-yellow-300">Exits:</h3>
+            <ul id="exits-list" class="list-disc list-inside text-gray-400 text-sm sm:text-base"></ul>
+        </div>
+
+        <div id="creatures-panel" class="mt-3">
+            <h3 class="text-lg font-semibold text-yellow-300 mb-2">Creatures</h3>
+            <ul id="creatures-list"></ul>
+        </div>
+
+        <div id="ground-items-panel" class="mt-3"> 
+            <div class="panel-header">
+                <h3 class="text-lg font-semibold text-yellow-300">On the Ground</h3>
+                <button id="get-all-button">Get All</button>
+            </div>
+            <div id="ground-items-grid-container"><div id="ground-items-grid" class="item-grid"></div></div>
+        </div>
+        
+        <div id="inventory-panel" class="mt-3"> 
+            <h3 class="text-lg font-semibold text-yellow-300 mb-2">Inventory</h3>
+            <div id="inventory-grid-container"><div id="inventory-grid" class="item-grid"></div></div>
+        </div>
+        <div id="item-description-panel-main" class="item-description-panel">
+            <p>Hover over an item to see its description.</p>
+        </div>
+    </div>
+  </div>
+
+  <div id="combat-modal" class="modal-overlay" style="position: fixed; top:0; left:0; width:100%; height:100%;">
+    <div id="combat-screen" class="modal-screen">
+        <button id="close-combat-modal-button" class="modal-close-button" title="Close Combat (if possible)">&#x2716;</button>
+        <div id="combat-stats-header-placeholder">
+            </div>
+        <h3>Combat!</h3>
+        <div id="combat-monsters-list"><h4>Fighting:</h4></div>
+        <div id="combat-log"><p>Combat begins...</p></div>
+        <div id="combat-actions">
+            <button id="combat-attack-button">Attack</button>
+            <button id="combat-auto-button">Auto</button>
+            <button id="close-combat-button" style="display: none;">Close</button>
+            <button id="restart-game-button" style="display: none;">You Died! Restart Game</button>
+        </div>
+        <div id="combat-inventory-panel">
+            <h4>Inventory</h4>
+            <div id="combat-inventory-grid-container">
+                <div id="combat-inventory-grid" class="item-grid"></div>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <div id="shop-modal" class="modal-overlay">
+    <div id="shop-screen" class="modal-screen">
+        <button id="close-shop-button" class="modal-close-button" title="Close Shop">&#x2716;</button>
+        <h3>The Old Weapon Shop</h3>
+        <div id="shop-wares-container">
+            <div id="shop-wares-grid" class="item-grid">
+                </div>
+        </div>
+        <div id="shop-player-inventory-panel"> 
+            <h4 class="text-lg font-semibold text-yellow-300 mb-2 mt-4">Your Inventory</h4>
+            <div id="shop-player-inventory-container"> 
+                 <div id="shop-player-inventory-grid" class="item-grid"></div>
+            </div>
+        </div>
+        <div id="player-gold-shop-display">Your Gold: 0 G</div>
+        <div id="item-description-panel-shop" class="item-description-panel">
+            <p>Hover over an item to see its description.</p>
+        </div>
+    </div>
+  </div>
+
+  <div id="player-screen-modal" class="modal-overlay" style="position: fixed; top:0; left:0; width:100%; height:100%;">
+    <div id="player-screen-content" class="modal-screen">
+        <button id="close-player-screen-button" class="modal-close-button" title="Close Player Screen">&#x2716;</button>
+        
+        <div id="player-wearing-panel">
+            <h3 class="text-xl font-semibold mb-2 text-center text-yellow-400">Wearing</h3>
+            <div id="equipment-grid" class="equipment-grid">
+                </div>
+        </div>
+
+        <div id="player-screen-right-panel">
+            <div id="player-screen-stats">
+                <h4 class="text-lg font-semibold mb-2 text-center text-yellow-300">Player Stats</h4>
+                 </div>
+            <div id="player-screen-details">
+                <h4 class="text-lg font-semibold mb-2 text-center text-yellow-300">Details</h4>
+                <p>Total Armor: <span id="player-total-armor-display">0</span></p>
+                <p>Experience: <span id="player-xp-display">0 / 100 (Lvl 1)</span></p>
+                <p>Gold: <span id="player-gold-details-display">0</span> G</p>
+            </div>
+            <div id="player-screen-inventory-panel">
+                <h4 class="text-lg font-semibold mb-2 text-center text-yellow-300">Inventory</h4>
+                <div id="player-screen-inventory-container">
+                    <div id="player-screen-inventory-grid" class="item-grid"></div>
+                </div>
+            </div>
+             <div id="item-description-panel-player" class="item-description-panel">
+                <p>Hover over an item to see its description.</p>
+            </div>
+        </div>
+    </div>
+  </div>
+
+
+<script>
+    // --- CONSTANTS ---
+    const GRID_ROWS = 9; const GRID_COLS = 9; 
+    const PLAYER_VIEW_GRID_X = Math.floor(GRID_COLS / 2); 
+    const PLAYER_VIEW_GRID_Y = Math.floor(GRID_ROWS / 2); 
+    const GAME_TICK_INTERVAL = 20000; const REGEN_AMOUNT = 3;
+    const STARVATION_DAMAGE_TICKS = 5; const STARVATION_DAMAGE = 1;
+    const MAX_MONSTER_RESPAWN_TICKS = 3; 
+    const AUTO_COMBAT_INTERVAL_MS = 750; 
+    const EQUIPMENT_SLOTS = ["head", "body", "legs", "feet", "arms", "weapon", "shield"];
+
+
+    // --- SVG ICONS & HUNGER STATES ---
+    const UP_ARROW_SVG = `<svg viewBox="0 0 20 20" fill="currentColor" class="stair-icon text-blue-400" title="Go Up"><path d="M10 6 L15 11 L5 11 Z" /></svg>`;
+    const DOWN_ARROW_SVG = `<svg viewBox="0 0 20 20" fill="currentColor" class="stair-icon text-red-400" title="Go Down"><path d="M10 14 L15 9 L5 9 Z" /></svg>`;
+    const HUNGER_STATES = ["Starving", "Famished", "Hungry", "Peckish", "Satisfied", "Full"];
+
+    // --- ROOM TYPE CLASSES ---
+    const roomTypeClasses = { 
+        cave: 'room-type-cave', road: 'room-type-road', building: 'room-type-building',
+        forest: 'room-type-forest', desert: 'room-type-desert', jungle: 'room-type-jungle',
+        tomb: 'room-type-tomb', default: 'bg-gray-700' 
+    };
+    
+    // --- GAME ITEMS ---
+    const gameItems = {
+        "bread": { id: "bread", name: "Bread", emoji: "🍞", type: "food", weight: 1, hungerValue: 1, price: 10, description: "A hearty loaf of bread.", verbs: { inventory: ["Eat", "Drop"], ground: ["Get", "Eat"], combat: ["Eat"], shop: ["Buy"], player_screen_inventory: ["Eat", "Drop"] } },
+        "meat": { id: "meat", name: "Cooked Meat", emoji: "🍖", type: "food", weight: 1, hungerValue: 2, description: "A juicy piece of cooked meat.", verbs: { inventory: ["Eat", "Drop"], ground: ["Get", "Eat"], combat: ["Eat"], player_screen_inventory: ["Eat", "Drop"] } },
+        "sword001": { id: "sword001", name: "Rusty Sword", emoji: "⚔️", type: "weapon", slot: "weapon", weight: 5, description: "An old, pitted sword.", attackDice: "1d6+2", verbs: { inventory: ["Equip", "Drop"], ground: ["Get"], player_screen_inventory: ["Equip", "Drop"] } }, 
+        "potion_hp_minor": {id: "potion_hp_minor", name: "Minor Healing Potion", emoji: "🧪", type: "potion", weight: 0.5, healAmount: 20, price: 20, description: "Restores 20 HP.", verbs: { inventory: ["Drink", "Drop"], ground: ["Get"], combat: ["Drink"], shop: ["Buy"], player_screen_inventory: ["Drink", "Drop"] } },
+        "bat_corpse": {id: "bat_corpse", name: "Bat Corpse", emoji: "🦇", type: "corpse", weight: 2, description: "The remains of a giant bat.", lootTable: { gold: 20, items: []}, verbs: {ground: ["Loot"]}}, 
+        "leather_helm": {id: "leather_helm", name: "Leather Helm", emoji: "⛑️", type: "armor", slot: "head", weight: 1, armorValue: 1, price: 2, description: "A simple leather helmet.", verbs: { inventory: ["Equip", "Drop"], ground: ["Get"], shop: ["Buy"], player_screen_inventory: ["Equip", "Drop"] }},
+        "leather_breastplate": {id: "leather_breastplate", name: "Leather Breastplate", emoji: "👕", type: "armor", slot: "body", weight: 3, armorValue: 2, price: 2, description: "Protects the torso.", verbs: { inventory: ["Equip", "Drop"], ground: ["Get"], shop: ["Buy"], player_screen_inventory: ["Equip", "Drop"] }},
+        "leather_leggings": {id: "leather_leggings", name: "Leather Leggings", emoji: "👖", type: "armor", slot: "legs", weight: 2, armorValue: 1, price: 2, description: "Leather leg protection.", verbs: { inventory: ["Equip", "Drop"], ground: ["Get"], shop: ["Buy"], player_screen_inventory: ["Equip", "Drop"] }},
+        "leather_boots": {id: "leather_boots", name: "Leather Boots", emoji: "👢", type: "armor", slot: "feet", weight: 1, armorValue: 1, price: 2, description: "Sturdy leather boots.", verbs: { inventory: ["Equip", "Drop"], ground: ["Get"], shop: ["Buy"], player_screen_inventory: ["Equip", "Drop"] }},
+        "leather_gloves": {id: "leather_gloves", name: "Leather Gloves", emoji: "🧤", type: "armor", slot: "arms", weight: 0.5, armorValue: 1, price: 2, description: "Protective leather gloves.", verbs: { inventory: ["Equip", "Drop"], ground: ["Get"], shop: ["Buy"], player_screen_inventory: ["Equip", "Drop"] }},
+        "basic_shield": {id: "basic_shield", name: "Basic Shield", emoji: "🛡️", type: "armor", slot: "shield", weight: 4, armorValue: 2, price: 3, description: "A simple wooden shield.", verbs: { inventory: ["Equip", "Drop"], ground: ["Get"], shop: ["Buy"], player_screen_inventory: ["Equip", "Drop"] }}
+    };
+
+    // --- MONSTER TEMPLATES ---
+    const monsterTemplates = {
+        "giant_bat": {
+            id: "giant_bat", name: "a Giant Bat", hp: 30, attackDice: "1d3+1",
+            loot: { gold: 20, items: [] }, 
+            respawnTicks: MAX_MONSTER_RESPAWN_TICKS,
+            aggressive: true,
+            xpValue: 50 
+        },
+        "puppy": { 
+            id: "puppy", name: "a fluffy puppy", hp: 50, attackDice: "5d5+20", 
+            loot: { gold: 0, items: [] }, 
+            respawnTicks: MAX_MONSTER_RESPAWN_TICKS + 5, 
+            aggressive: false,
+            xpValue: 100
+        },
+        "orc_blacksmith": { 
+            id: "orc_blacksmith", name: "The Orc Blacksmith", hp: 100, attackDice: "1d1", 
+            loot: { gold: 0, items: [] },
+            respawnTicks: -1, 
+            aggressive: false,
+            isShopkeeper: true,
+            xpValue: 0
+        }
+    };
+    
+    // --- GAME DATA ---
+    let initialRoomsState = {}; 
+    let initialPlayerState = {}; 
+    let currentGameTickNumber = 0;
+
+    // --- ROOMS ---
+    const rooms = {
+        "0_5_5": { title: "Dimly Lit Cave Entrance", type: "cave", description: "The air is cool and damp...", 
+                   items: [gameItems.sword001, gameItems.potion_hp_minor, gameItems.potion_hp_minor, gameItems.potion_hp_minor, gameItems.potion_hp_minor, gameItems.potion_hp_minor, gameItems.meat, gameItems.meat, gameItems.meat, gameItems.bread, gameItems.bread, gameItems.leather_helm], 
+                   monsters: [],
+                   exits: { north: "0_5_4", east: "0_6_5", south: "0_5_6", west: "0_4_5", down: "-1_5_5" } },
+        "0_5_4": { title: "Narrow Passage", type: "cave", description: "The cave narrows here...", items: [gameItems.leather_boots], monsters: [], exits: { south: "0_5_5", north: "0_5_3" } },
+        "0_5_3": { title: "Bat Roost", type: "cave", description: "A high-ceilinged cavern...", items: [], 
+                   monsters: [{ templateId: "giant_bat", currentHp: 30, nextRespawnTick: -1, id: "bat_0_5_3_1" }], 
+                   exits: { south: "0_5_4", east: "0_6_3" } },
+        "0_6_3": { title: "Hidden Alcove", type: "cave", description: "Tucked away...", 
+                   items: [gameItems.potion_hp_minor, gameItems.bread, gameItems.leather_breastplate], 
+                   monsters: [ 
+                        { templateId: "giant_bat", currentHp: 30, nextRespawnTick: -1, id: "bat_0_6_3_alcove1" },
+                        { templateId: "giant_bat", currentHp: 30, nextRespawnTick: -1, id: "bat_0_6_3_alcove2" }
+                   ], 
+                   exits: { west: "0_5_3" } },
+        "0_6_5": { title: "Guard Room (Empty)", type: "cave", description: "This chamber looks like...", items: [gameItems.leather_leggings], monsters: [], exits: { west: "0_5_5", east: "0_7_5", up: "1_6_5" } },
+        "0_7_5": { title: "Dusty Storeroom", type: "cave", description: "Cobwebs hang thick...", items: [gameItems.leather_gloves], monsters: [], exits: { west: "0_6_5" } },
+        "0_5_6": { title: "Crumbling Corridor", type: "cave", description: "The passage here is unstable...", 
+                   items: [gameItems.meat], 
+                   monsters: [{templateId: "puppy", currentHp: 50, nextRespawnTick: -1, id: "puppy_0_5_6_1"}], 
+                   exits: { north: "0_5_5", south: "0_5_7" } },
+        "0_5_7": { title: "Underground Spring", type: "cave", description: "A small, clear spring...", items: [], monsters: [], exits: { north: "0_5_6" } },
+        "0_4_5": { title: "Spider's Lair", type: "cave", description: "Thick, sticky webs...", items: [], monsters: [], exits: { east: "0_5_5", west: "0_3_5" } },
+        "0_3_5": { title: "Chasm Edge", type: "cave", description: "The passage opens onto...", items: [], monsters: [], exits: { east: "0_4_5" } },
+        "-1_5_5": { title: "Dark Crypt Antechamber", type: "tomb", description: "You've descended into...", items: [], monsters: [], exits: { up: "0_5_5", north: "-1_5_4", south: "-1_5_6" } },
+        "-1_5_4": { title: "Sarcophagus Chamber", type: "tomb", description: "A large stone sarcophagus...", items: [], monsters: [], exits: { south: "-1_5_5", east: "-1_6_4" } },
+        "-1_6_4": { title: "Trapped Hallway", type: "tomb", description: "The floor tiles...", items: [], monsters: [], exits: { west: "-1_5_4" } },
+        "-1_5_6": { title: "Flooded Tunnel", type: "tomb", description: "Murky water, knee-deep...", items: [], monsters: [], exits: { north: "-1_5_5", west: "-1_4_6" } },
+        "-1_4_6": { title: "Ancient Tomb", type: "tomb", description: "This small chamber...", items: [], monsters: [], exits: { east: "-1_5_6" } },
+        "1_6_5": { title: "Base of a Crumbling Tower", type: "building", description: "You emerge into...", items: [], monsters: [], exits: { down: "0_6_5", north: "1_6_4", east: "1_7_5" } },
+        "1_6_4": { title: "Overgrown Courtyard", type: "road", description: "Weeds and wildflowers...", items: [], monsters: [], exits: { south: "1_6_5", west: "1_5_4", north: "1_6_3"} },
+        "1_5_4": { title: "Ruined Wall Section", type: "building", description: "Part of the old tower's...", items: [], monsters: [], exits: { east: "1_6_4" } },
+        "1_7_5": { title: "Path into the Woods", type: "forest", description: "A narrow, overgrown path...", items: [], monsters: [], exits: { west: "1_6_5", east: "1_8_5" } },
+        "1_8_5": { title: "Dense Thicket", type: "forest", description: "The path becomes almost impassable here, blocked by thorny bushes and dense undergrowth. Turning back west seems the only option.", items: [], monsters: [], exits: { west: "1_7_5", north: "1_8_4" } }, 
+        "1_8_4": { 
+            title: "The Old Weapon Shop", type: "building", 
+            description: "The air smells of soot, old leather, and oiled steel. An orcish blacksmith eyes you from behind a sturdy counter, occasionally hammering on a piece of glowing metal.",
+            items: [], 
+            monsters: [{templateId: "orc_blacksmith", currentHp: 100, nextRespawnTick: -1, id: "orc_blacksmith_1_8_4_shop"}],
+            exits: { south: "1_8_5" },
+            isShop: true 
+        },
+        "1_6_3": { title: "Whispering Woods Path", type: "forest", description: "The path winds deeper...", items: [], monsters: [], exits: { south: "1_6_4", north: "1_6_2" } },
+        "1_6_2": { title: "Ancient Oak Clearing", type: "forest", description: "A massive, ancient oak...", items: [], monsters: [], exits: { south: "1_6_3", north: "1_6_1" } },
+        "1_6_1": { title: "Tangled Roots Trail", type: "forest", description: "The ground here is a maze...", items: [], monsters: [], exits: { south: "1_6_2", north: "1_6_0" } },
+        "1_6_0": { title: "Sun-Dappled Glade", type: "forest", description: "A peaceful glade...", items: [], monsters: [], exits: { south: "1_6_1", north: "1_6_-1" } },
+        "1_6_-1": { title: "Murky Forest Pond", type: "forest", description: "The path leads to the edge...", items: [], monsters: [], exits: { south: "1_6_0", north: "1_6_-2" } },
+        "1_6_-2": { title: "Overgrown Hunter's Blind", type: "forest", description: "You find a dilapidated...", items: [], monsters: [], exits: { south: "1_6_-1", north: "1_6_-3" } },
+        "1_6_-3": { title: "Echoing Ravine Edge", type: "forest", description: "The path skirts the edge...", items: [], monsters: [], exits: { south: "1_6_-2", north: "1_6_-4" } },
+        "1_6_-4": { title: "Fallen Log Bridge", type: "forest", description: "A large, moss-covered log...", items: [], monsters: [], exits: { south: "1_6_-3", north: "1_6_-5" } },
+        "1_6_-5": { title: "Deep Forest Grove", type: "forest", description: "The trees here are...", items: [], monsters: [], exits: { south: "1_6_-4", north: "1_6_-6" } },
+        "1_6_-6": { title: "Northern Forest Edge", type: "forest", description: "The forest begins to thin...", items: [], monsters: [], exits: { south: "1_6_-5" } }
+    };
+    
+    let player = {
+        currentRoomId: "0_5_5", hp: 100, maxHp: 100, mp: 100, maxMp: 100,
+        movePoints: 100, maxMovePoints: 100, hunger: 5, maxHunger: 5, 
+        inventory: [gameItems.bread, gameItems.meat],
+        gold: 50,
+        equippedItems: { 
+            head: null, body: null, legs: null, feet: null,
+            arms: null, weapon: null, shield: null
+        },
+        totalArmor: 0,
+        xp: 0, level: 1, xpToNextLevel: 100 
+    };
+
+    // DOM Elements
+    let mapContainerEl, roomTitleEl, roomDescriptionEl, exitsListEl, messageAreaEl, creaturesListEl;
+    let hpBarInnerEl, hpBarTextEl, moveBarInnerEl, moveBarTextEl, manaBarInnerEl, manaBarTextEl, hungerBarInnerEl, hungerBarTextEl, coinsDisplayEl, xpBarInnerEl, xpBarTextEl;
+    let inventoryGridContainerEl, inventoryGridEl, groundItemsGridContainerEl, groundItemsGridEl, combatInventoryGridContainerEl, combatInventoryGridEl, shopWaresGridEl, shopPlayerInventoryGridEl; 
+    let forceTickButtonREl, openPlayerScreenButtonEl, getAllItemsButtonEl; 
+    let gameTickIntervalId = null;
+    let activeItemActionPalette = null; 
+    let combatModalEl, combatScreenEl, combatMonstersListEl, combatLogEl, combatAttackButtonEl, combatAutoButtonEl, closeCombatButtonEl, restartGameButtonEl, combatStatsHeaderPlaceholderEl; 
+    let shopModalEl, shopScreenEl, closeShopButtonEl, playerGoldShopDisplayEl, itemDescriptionPanelMainEl, itemDescriptionPanelShopEl, itemDescriptionPanelPlayerEl, shopPlayerInventoryContainerEl; 
+    let playerScreenModalEl, closePlayerScreenButtonEl, equipmentGridEl, playerScreenStatsEl, playerTotalArmorDisplayEl, playerXpDisplayEl, playerGoldDetailsDisplayEl, playerScreenInventoryContainerEl, playerScreenInventoryGridEl; 
+    let currentCombatants = []; 
+    let combatActive = false;
+    let autoCombatIntervalId = null; 
+
+    const shopItemsForSale = [ 
+        { item: gameItems.potion_hp_minor, price: 20 },
+        { item: gameItems.bread, price: 10 },
+        { item: gameItems.leather_helm, price: 2},
+        { item: gameItems.leather_breastplate, price: 2},
+        { item: gameItems.leather_leggings, price: 2},
+        { item: gameItems.leather_boots, price: 2},
+        { item: gameItems.leather_gloves, price: 2},
+        { item: gameItems.basic_shield, price: 3}
+    ];
+
+
+    // --- UTILITY FUNCTIONS ---
+    function getRoomId(z, x, y) { return `${z}_${x}_${y}`; }
+    function parseRoomId(roomId) { if (!roomId) return null; const parts = roomId.split('_'); return { z: parseInt(parts[0]), x: parseInt(parts[1]), y: parseInt(parts[2]) }; }
+
+    // --- INITIALIZATION ---
+    function initializeGame() {
+        initialPlayerState = JSON.parse(JSON.stringify(player)); 
+        initialRoomsState = JSON.parse(JSON.stringify(rooms)); 
+
+        mapContainerEl = document.getElementById('map-container');
+        roomTitleEl = document.getElementById('room-title');
+        roomDescriptionEl = document.getElementById('room-description');
+        exitsListEl = document.getElementById('exits-list');
+        messageAreaEl = document.getElementById('message-area');
+        creaturesListEl = document.getElementById('creatures-list');
+        coinsDisplayEl = document.getElementById('coins-display');
+        
+        hpBarInnerEl = document.getElementById('hp-bar-inner'); hpBarTextEl = document.getElementById('hp-bar-text');
+        moveBarInnerEl = document.getElementById('move-bar-inner'); moveBarTextEl = document.getElementById('move-bar-text');
+        manaBarInnerEl = document.getElementById('mana-bar-inner'); manaBarTextEl = document.getElementById('mana-bar-text');
+        hungerBarInnerEl = document.getElementById('hunger-bar-inner'); hungerBarTextEl = document.getElementById('hunger-bar-text');
+        xpBarInnerEl = document.getElementById('xp-bar-inner'); xpBarTextEl = document.getElementById('xp-bar-text');
+
+        inventoryGridContainerEl = document.getElementById('inventory-grid-container');
+        inventoryGridEl = document.getElementById('inventory-grid');
+        groundItemsGridContainerEl = document.getElementById('ground-items-grid-container');
+        groundItemsGridEl = document.getElementById('ground-items-grid');
+        combatInventoryGridContainerEl = document.getElementById('combat-inventory-grid-container');
+        combatInventoryGridEl = document.getElementById('combat-inventory-grid');
+        shopWaresGridEl = document.getElementById('shop-wares-grid');
+        shopPlayerInventoryGridEl = document.getElementById('shop-player-inventory-grid');
+        shopPlayerInventoryContainerEl = document.getElementById('shop-player-inventory-container'); 
+        
+        forceTickButtonREl = document.getElementById('force-tick-button-r'); 
+        openPlayerScreenButtonEl = document.getElementById('open-player-screen-button');
+        getAllItemsButtonEl = document.getElementById('get-all-button');
+        
+        combatModalEl = document.getElementById('combat-modal');
+        combatScreenEl = document.getElementById('combat-screen');
+        combatStatsHeaderPlaceholderEl = document.getElementById('combat-stats-header-placeholder'); 
+        combatMonstersListEl = document.getElementById('combat-monsters-list');
+        combatLogEl = document.getElementById('combat-log');
+        combatAttackButtonEl = document.getElementById('combat-attack-button');
+        combatAutoButtonEl = document.getElementById('combat-auto-button'); 
+        closeCombatButtonEl = document.getElementById('close-combat-button'); 
+        document.getElementById('close-combat-modal-button').addEventListener('click', ()=>{ if(!combatActive || player.hp <= 0 || currentCombatants.every(c => c.currentHp <=0) ) endCombat();}); 
+        restartGameButtonEl = document.getElementById('restart-game-button');
+
+        shopModalEl = document.getElementById('shop-modal');
+        shopScreenEl = document.getElementById('shop-screen');
+        closeShopButtonEl = document.getElementById('close-shop-button');
+        playerGoldShopDisplayEl = document.getElementById('player-gold-shop-display');
+
+        playerScreenModalEl = document.getElementById('player-screen-modal');
+        closePlayerScreenButtonEl = document.getElementById('close-player-screen-button');
+        equipmentGridEl = document.getElementById('equipment-grid');
+        playerScreenStatsEl = document.getElementById('player-screen-stats');
+        playerTotalArmorDisplayEl = document.getElementById('player-total-armor-display');
+        playerXpDisplayEl = document.getElementById('player-xp-display');
+        playerGoldDetailsDisplayEl = document.getElementById('player-gold-details-display');
+        playerScreenInventoryContainerEl = document.getElementById('player-screen-inventory-container');
+        playerScreenInventoryGridEl = document.getElementById('player-screen-inventory-grid');
+
+        itemDescriptionPanelMainEl = document.getElementById('item-description-panel-main');
+        itemDescriptionPanelShopEl = document.getElementById('item-description-panel-shop');
+        itemDescriptionPanelPlayerEl = document.getElementById('item-description-panel-player');
+
+
+        const allElementsExist = [mapContainerEl, roomTitleEl, roomDescriptionEl, exitsListEl, messageAreaEl, hpBarInnerEl, hpBarTextEl, moveBarInnerEl, moveBarTextEl, manaBarInnerEl, manaBarTextEl, hungerBarInnerEl, hungerBarTextEl, xpBarInnerEl, xpBarTextEl, inventoryGridContainerEl, inventoryGridEl, groundItemsGridContainerEl, groundItemsGridEl, combatInventoryGridContainerEl, combatInventoryGridEl, forceTickButtonREl, creaturesListEl, coinsDisplayEl, combatModalEl, combatScreenEl, combatStatsHeaderPlaceholderEl, combatMonstersListEl, combatLogEl, combatAttackButtonEl, combatAutoButtonEl, closeCombatButtonEl, restartGameButtonEl, combatInventoryGridEl, shopModalEl, shopScreenEl, closeShopButtonEl, shopWaresGridEl, shopPlayerInventoryGridEl, shopPlayerInventoryContainerEl, playerGoldShopDisplayEl, openPlayerScreenButtonEl, playerScreenModalEl, closePlayerScreenButtonEl, equipmentGridEl, playerScreenStatsEl, playerTotalArmorDisplayEl, playerXpDisplayEl, playerGoldDetailsDisplayEl, playerScreenInventoryContainerEl, playerScreenInventoryGridEl, getAllItemsButtonEl, itemDescriptionPanelMainEl, itemDescriptionPanelShopEl, itemDescriptionPanelPlayerEl].every(el => el);
+        if (!allElementsExist) {
+            console.error("Initialization failed: Critical DOM elements missing.");
+            if(messageAreaEl) {messageAreaEl.textContent = "Error: Critical elements missing."; messageAreaEl.style.color = '#F56565';}
+            return;
+        }
+        
+        document.addEventListener('keydown', handleNumpadInput);
+        forceTickButtonREl.addEventListener('click', gameTick); 
+        openPlayerScreenButtonEl.addEventListener('click', showPlayerScreenModal);
+        closePlayerScreenButtonEl.addEventListener('click', hidePlayerScreenModal);
+        getAllItemsButtonEl.addEventListener('click', getAllItemsFromGround);
+        combatAttackButtonEl.addEventListener('click', processCombatRound);
+        combatAutoButtonEl.addEventListener('click', toggleAutoCombat); 
+        closeCombatButtonEl.addEventListener('click', endCombat);
+        restartGameButtonEl.addEventListener('click', restartGame);
+        closeShopButtonEl.addEventListener('click', hideShopModal);
+
+
+        document.body.setAttribute('tabindex', '-1'); document.body.focus(); 
+        document.addEventListener('click', (event) => {
+            if (activeItemActionPalette && !activeItemActionPalette.contains(event.target) && 
+                !event.target.closest('.item-slot')) { 
+                hideActiveItemActionPalette();
+            }
+        });
+        renderGame();
+        startGameTick();
+    }
+
+    function restartGame() {
+        player = JSON.parse(JSON.stringify(initialPlayerState)); 
+        for (const roomId in initialRoomsState) {
+            if (rooms.hasOwnProperty(roomId)) { 
+                rooms[roomId].items = JSON.parse(JSON.stringify(initialRoomsState[roomId].items || []));
+                if (initialRoomsState[roomId].monsters) {
+                     rooms[roomId].monsters = initialRoomsState[roomId].monsters.map((mTemplate, index) => {
+                        const template = monsterTemplates[mTemplate.templateId];
+                        return {
+                            templateId: mTemplate.templateId,
+                            currentHp: template.hp, 
+                            nextRespawnTick: -1,    
+                            id: mTemplate.id || `${mTemplate.templateId}_${roomId}_${index}` 
+                        };
+                    });
+                } else {
+                    rooms[roomId].monsters = [];
+                }
+            }
+        }
+
+        currentGameTickNumber = 0;
+        if (autoCombatIntervalId) clearInterval(autoCombatIntervalId); 
+        autoCombatIntervalId = null;
+        combatActive = false;
+        hideCombatModal();
+        hideShopModal(); 
+        hidePlayerScreenModal();
+        combatLogEl.innerHTML = '<p>Combat begins...</p>'; 
+        showMessage("Game Restarted.", false);
+        renderGame();
+    }
+
+    // --- RENDERING FUNCTIONS ---
+    function renderGame() {
+        hideActiveItemActionPalette(); 
+        clearItemDescriptionPanels(); 
+        renderMap();
+        renderRoomInfo();
+        renderStats();
+        renderInventory();
+        renderGroundItems();
+        renderCreatures();
+        renderCombatInventory(); 
+        renderShopWares(); 
+        renderPlayerScreen(); 
+        renderShopPlayerInventory(); 
+    }
+
+    function renderStats() {
+        hpBarInnerEl.style.width = `${(player.hp / player.maxHp) * 100}%`; hpBarTextEl.textContent = `HP: ${player.hp}/${player.maxHp}`;
+        moveBarInnerEl.style.width = `${(player.movePoints / player.maxMovePoints) * 100}%`; moveBarTextEl.textContent = `Move: ${player.movePoints}/${player.maxMovePoints}`;
+        manaBarInnerEl.style.width = `${(player.mp / player.maxMp) * 100}%`; manaBarTextEl.textContent = `Mana: ${player.mp}/${player.maxMp}`;
+        hungerBarInnerEl.style.width = `${(player.hunger / player.maxHunger) * 100}%`; hungerBarTextEl.textContent = `Hunger: ${HUNGER_STATES[player.hunger]}`;
+        coinsDisplayEl.textContent = `${player.gold} G`;
+        const xpPercent = Math.min(100, (player.xp / player.xpToNextLevel) * 100); 
+        xpBarInnerEl.style.width = `${xpPercent}%`;
+        xpBarTextEl.textContent = `XP: ${player.xp}/${player.xpToNextLevel} (Lvl ${player.level})`;
+
+        if (combatModalEl.style.display === 'flex' && combatStatsHeaderPlaceholderEl.firstChild) {
+            const combatStatsPanel = combatStatsHeaderPlaceholderEl.querySelector('#stats-panel');
+            if (combatStatsPanel) {
+                combatStatsPanel.querySelector('#hp-bar-inner').style.width = `${(player.hp / player.maxHp) * 100}%`;
+                combatStatsPanel.querySelector('#hp-bar-text').textContent = `HP: ${player.hp}/${player.maxHp}`;
+                combatStatsPanel.querySelector('#move-bar-inner').style.width = `${(player.movePoints / player.maxMovePoints) * 100}%`;
+                combatStatsPanel.querySelector('#move-bar-text').textContent = `Move: ${player.movePoints}/${player.maxMovePoints}`;
+                combatStatsPanel.querySelector('#mana-bar-inner').style.width = `${(player.mp / player.maxMp) * 100}%`;
+                combatStatsPanel.querySelector('#mana-bar-text').textContent = `Mana: ${player.mp}/${player.maxMp}`;
+                combatStatsPanel.querySelector('#hunger-bar-inner').style.width = `${(player.hunger / player.maxHunger) * 100}%`;
+                combatStatsPanel.querySelector('#hunger-bar-text').textContent = `Hunger: ${HUNGER_STATES[player.hunger]}`;
+            }
+            const combatCoinsDisplay = combatStatsHeaderPlaceholderEl.querySelector('#coins-display');
+            if(combatCoinsDisplay) combatCoinsDisplay.textContent = `${player.gold} G`;
+            
+            const combatXpBarContainer = combatStatsHeaderPlaceholderEl.querySelector('#xp-bar-container'); 
+            if(combatXpBarContainer){
+                const combatXpBarInner = combatXpBarContainer.querySelector('#xp-bar-inner');
+                const combatXpBarText = combatXpBarContainer.querySelector('#xp-bar-text');
+                if(combatXpBarInner) combatXpBarInner.style.width = `${xpPercent}%`;
+                if(combatXpBarText) combatXpBarText.textContent = `XP: ${player.xp}/${player.xpToNextLevel} (Lvl ${player.level})`;
+            }
+        }
+    }
+
+    function createItemSlotDOM(item, indexOrSlotName, context, price) { 
+        const slot = document.createElement('div');
+        slot.classList.add('item-slot');
+        
+        const itemVisualContainer = document.createElement('div'); 
+        itemVisualContainer.classList.add('item-visual-container');
+
+        if (context === "equipment") { 
+            slot.classList.add('equipment-slot');
+            const label = document.createElement('div');
+            label.classList.add('equipment-slot-label');
+            label.textContent = indexOrSlotName.charAt(0).toUpperCase() + indexOrSlotName.slice(1); 
+            slot.appendChild(label);
+            itemVisualContainer.classList.add('item-slot-visual'); 
+        }
+
+        if (item) {
+            itemVisualContainer.textContent = item.emoji || '?'; 
+            
+            const tooltip = document.createElement('span');
+            tooltip.classList.add('item-tooltip');
+            let tooltipText = `${item.name}`; 
+            if (context === "shop" && price !== undefined) {
+                tooltipText += ` (${price}G)`;
+            } else {
+                 tooltipText += ` (W: ${item.weight})`;
+            }
+            tooltip.textContent = tooltipText;
+            itemVisualContainer.appendChild(tooltip); 
+            slot.appendChild(itemVisualContainer);
+            
+            slot.addEventListener('mouseenter', () => {
+                showItemActionPalette(slot, item, indexOrSlotName, context, price);
+                updateItemDescriptionPanel(item, context);
+            });
+            slot.addEventListener('mouseleave', (e) => {
+                setTimeout(() => {
+                    if (activeItemActionPalette && !slot.contains(document.activeElement) && !activeItemActionPalette.matches(':hover')) {
+                        const relatedTargetIsPalette = event.relatedTarget && event.relatedTarget.closest && event.relatedTarget.closest('.item-actions-palette');
+                        const relatedTargetIsSlot = event.relatedTarget && event.relatedTarget.closest && event.relatedTarget.closest('.item-slot') === slot;
+                        if (!relatedTargetIsPalette && !relatedTargetIsSlot) {
+                        }
+                    }
+                }, 50);
+            });
+
+        } else if (context !== "equipment") { 
+            itemVisualContainer.innerHTML = '&nbsp;'; 
+            slot.appendChild(itemVisualContainer);
+        } else {
+            slot.appendChild(itemVisualContainer);
+        }
+        return slot;
+    }
+    
+    function showItemActionPalette(slotElement, item, itemIndexOrSlotName, context, price) { 
+        hideActiveItemActionPalette(); 
+        const palette = document.createElement('div');
+        palette.classList.add('item-actions-palette');
+        
+        let verbsForContext = [];
+        if (item.verbs) {
+            verbsForContext = item.verbs[context] || [];
+            if ((context === "player_screen_inventory") && item.verbs["inventory"]) { 
+                verbsForContext = item.verbs["inventory"];
+            }
+            if (context === "equipment" && item) { 
+                 verbsForContext = ["Remove"]; 
+            }
+        }
+
+        if (verbsForContext.length === 0) return; 
+
+        verbsForContext.forEach(verb => {
+            const button = document.createElement('button');
+            button.textContent = verb;
+            if (verb === "Buy" && price !== undefined) {
+                 button.textContent = `Buy (${price}G)`;
+            }
+            button.addEventListener('click', (e) => {
+                e.stopPropagation(); 
+                performItemAction(item, verb, itemIndexOrSlotName, context, price); 
+                hideActiveItemActionPalette();
+                clearItemDescriptionPanels(); 
+            });
+            palette.appendChild(button);
+        });
+        slotElement.appendChild(palette);
+        activeItemActionPalette = palette; 
+        palette.addEventListener('mouseleave', (e) => {
+             if (!e.relatedTarget || (!palette.contains(e.relatedTarget) && !slotElement.contains(e.relatedTarget))) {
+                hideActiveItemActionPalette();
+            }
+        });
+    }
+
+    function hideActiveItemActionPalette() {
+        if (activeItemActionPalette) { activeItemActionPalette.remove(); activeItemActionPalette = null; }
+    }
+    function updateItemDescriptionPanel(item, context) {
+        let panelEl;
+        if (context === "shop") panelEl = itemDescriptionPanelShopEl;
+        else if (context === "player_screen_inventory" || context === "equipment") panelEl = itemDescriptionPanelPlayerEl;
+        else panelEl = itemDescriptionPanelMainEl; 
+
+        if (item && item.description) {
+            panelEl.innerHTML = `<p>${item.description}</p>`;
+        } else {
+            panelEl.innerHTML = `<p>Hover over an item to see its description.</p>`;
+        }
+    }
+    function clearItemDescriptionPanels() {
+        itemDescriptionPanelMainEl.innerHTML = `<p>Hover over an item to see its description.</p>`;
+        itemDescriptionPanelShopEl.innerHTML = `<p>Hover over an item to see its description.</p>`;
+        itemDescriptionPanelPlayerEl.innerHTML = `<p>Hover over an item to see its description.</p>`;
+    }
+
+
+    function renderInventory() {
+        inventoryGridEl.innerHTML = ''; 
+        player.inventory.forEach((item, index) => { 
+            inventoryGridEl.appendChild(createItemSlotDOM(item, index, "inventory"));
+        });
+        inventoryGridContainerEl.style.overflowY = player.inventory.length > 15 ? 'auto' : 'hidden';
+    }
+    function renderCombatInventory() {
+        combatInventoryGridEl.innerHTML = '';
+         player.inventory.forEach((item, index) => { 
+            combatInventoryGridEl.appendChild(createItemSlotDOM(item, index, "combat"));
+        });
+        combatInventoryGridContainerEl.style.overflowY = player.inventory.length > 15 ? 'auto' : 'hidden';
+    }
+
+    function renderGroundItems() {
+        groundItemsGridEl.innerHTML = ''; 
+        const currentRoom = rooms[player.currentRoomId];
+        if (!currentRoom || !currentRoom.items || currentRoom.items.length === 0) { 
+            groundItemsGridContainerEl.style.overflowY = 'hidden'; 
+            return; 
+        }
+        currentRoom.items.forEach((item, index) => {
+            groundItemsGridEl.appendChild(createItemSlotDOM(item, index, "ground"));
+        });
+        groundItemsGridContainerEl.style.overflowY = currentRoom.items.length > 15 ? 'auto' : 'hidden';
+    }
+
+    function renderCreatures() {
+        creaturesListEl.innerHTML = '';
+        const currentRoom = rooms[player.currentRoomId];
+        if (currentRoom && currentRoom.monsters) {
+            currentRoom.monsters.forEach((monsterInstance, index) => {
+                const template = monsterTemplates[monsterInstance.templateId];
+                if (template) {
+                    if (monsterInstance.currentHp > 0 && monsterInstance.nextRespawnTick === -1) { 
+                        const li = document.createElement('li');
+                        li.textContent = `${template.name}`;
+                        if (!template.isShopkeeper) { 
+                            li.textContent += ` (HP: ${monsterInstance.currentHp}/${template.hp})`;
+                            const fightButton = document.createElement('button');
+                            fightButton.textContent = "Fight";
+                            fightButton.onclick = () => initiateCombat(monsterInstance); 
+                            li.appendChild(fightButton);
+                        } else {
+                            li.textContent += ` (Shopkeeper)`;
+                        }
+                        creaturesListEl.appendChild(li);
+                    }
+                }
+            });
+        }
+    }
+    
+    function renderMap() { 
+        mapContainerEl.innerHTML = ''; 
+        const playerCoords = parseRoomId(player.currentRoomId);
+        if (!playerCoords) { console.error("Player is in an invalid room:", player.currentRoomId); mapContainerEl.textContent = "Error: Player location unknown."; return; }
+        for (let gy = 0; gy < GRID_ROWS; gy++) { 
+            for (let gx = 0; gx < GRID_COLS; gx++) { 
+                const cell = document.createElement('div'); cell.className = 'map-cell'; 
+                const worldX = playerCoords.x + (gx - PLAYER_VIEW_GRID_X); 
+                const worldY = playerCoords.y + (gy - PLAYER_VIEW_GRID_Y); 
+                const worldZ = playerCoords.z;
+                const roomIdForCell = getRoomId(worldZ, worldX, worldY);
+                const roomInCell = rooms[roomIdForCell];
+                cell.innerHTML = ''; 
+                if (roomInCell) {
+                    const typeClass = roomTypeClasses[roomInCell.type] || roomTypeClasses.default;
+                    cell.classList.add(typeClass);
+                    if (roomIdForCell === player.currentRoomId) { 
+                        const marker = document.createElement('div');
+                        marker.classList.add('player-marker');
+                        cell.appendChild(marker);
+                    }
+                    if (roomInCell.exits.up) {
+                        const upQuadrant = document.createElement('div'); upQuadrant.classList.add('stair-quadrant', 'stair-up-quadrant'); upQuadrant.innerHTML = UP_ARROW_SVG;
+                        if (roomIdForCell === player.currentRoomId) { upQuadrant.classList.add('clickable'); upQuadrant.title = "Go Up"; upQuadrant.addEventListener('click', (e) => { e.stopPropagation(); handleStairsClick('up'); }); }
+                        cell.appendChild(upQuadrant);
+                    }
+                    if (roomInCell.exits.down) {
+                        const downQuadrant = document.createElement('div'); downQuadrant.classList.add('stair-quadrant', 'stair-down-quadrant'); downQuadrant.innerHTML = DOWN_ARROW_SVG;
+                        if (roomIdForCell === player.currentRoomId) { downQuadrant.classList.add('clickable'); downQuadrant.title = "Go Down"; downQuadrant.addEventListener('click', (e) => { e.stopPropagation(); handleStairsClick('down'); }); }
+                        cell.appendChild(downQuadrant);
+                    }
+                    if (roomIdForCell === player.currentRoomId) { cell.classList.add('current-room');
+                    } else {
+                        const pRoom = rooms[player.currentRoomId];
+                        if (pRoom && pRoom.exits) {
+                            for(const dir of ['north', 'south', 'east', 'west']) {
+                                if (pRoom.exits[dir] === roomIdForCell) { cell.classList.add('clickable-room'); cell.title = `Go ${dir} to ${roomInCell.title}`; break; }
+                            }
+                        }
+                    }
+                    cell.addEventListener('click', () => handleCellClick(roomIdForCell)); 
+                } else { cell.classList.add('empty-space'); }
+                mapContainerEl.appendChild(cell);
+            }
+        }
+    }
+    function renderRoomInfo() { 
+        const currentRoom = rooms[player.currentRoomId];
+        if (!currentRoom) { roomTitleEl.textContent = "Lost in the Void"; roomDescriptionEl.textContent = "You are somewhere you shouldn't be."; exitsListEl.innerHTML = ''; return; }
+        if (!currentRoom.items) currentRoom.items = []; 
+        if (!currentRoom.monsters) currentRoom.monsters = [];
+        roomTitleEl.textContent = currentRoom.title; roomDescriptionEl.textContent = currentRoom.description; roomDescriptionEl.scrollTop = 0; exitsListEl.innerHTML = ''; 
+        const exitOrder = ['north', 'south', 'east', 'west', 'up', 'down'];
+        exitOrder.forEach(direction => {
+            const targetRoomId = currentRoom.exits[direction];
+            if (targetRoomId) {
+                const targetRoom = rooms[targetRoomId]; const exitName = targetRoom ? targetRoom.title : "Unknown Area";
+                const li = document.createElement('li'); const link = document.createElement('a'); link.href = '#'; link.textContent = `${direction.charAt(0).toUpperCase() + direction.slice(1)}`; 
+                link.addEventListener('click', (e) => { e.preventDefault(); 
+                    if (currentRoom.exits[direction]) {
+                        if (direction === 'up' || direction === 'down') { handleStairsClick(direction); } else { moveToRoom(currentRoom.exits[direction], direction); }
+                    }
+                });
+                li.appendChild(link); li.appendChild(document.createTextNode(`: ${exitName}`)); exitsListEl.appendChild(li);
+            }
+        });
+    }
+    function showMessage(text, isError = false) { messageAreaEl.textContent = text; messageAreaEl.style.color = isError ? '#F56565' : '#F6E05E'; setTimeout(() => { messageAreaEl.textContent = ''; }, 3000); }
+
+    // --- PLAYER SCREEN LOGIC ---
+    function showPlayerScreenModal() {
+        playerScreenModalEl.style.display = 'flex';
+        openPlayerScreenButtonEl.style.display = 'none'; 
+        renderPlayerScreen(); 
+    }
+    function hidePlayerScreenModal() {
+        playerScreenModalEl.style.display = 'none';
+        openPlayerScreenButtonEl.style.display = 'block'; 
+    }
+    function renderPlayerScreen() {
+        equipmentGridEl.innerHTML = '';
+        EQUIPMENT_SLOTS.forEach(slotName => {
+            const equippedItem = player.equippedItems[slotName];
+            equipmentGridEl.appendChild(createItemSlotDOM(equippedItem, slotName, "equipment"));
+        });
+
+        const mainStatsPanelClone = document.getElementById('stats-panel').cloneNode(true);
+        playerScreenStatsEl.innerHTML = `<h4 class="text-lg font-semibold mb-2 text-center text-yellow-300">Player Stats</h4>`;
+        playerScreenStatsEl.appendChild(mainStatsPanelClone);
+
+
+        calculateTotalArmor(); 
+        playerTotalArmorDisplayEl.textContent = player.totalArmor;
+        playerXpDisplayEl.textContent = `${player.xp} / ${player.xpToNextLevel} (Lvl ${player.level})`;
+        playerGoldDetailsDisplayEl.textContent = player.gold;
+
+        const playerScreenInvContainer = document.getElementById('player-screen-inventory-container');
+        playerScreenInventoryGridEl.innerHTML = '';
+        player.inventory.forEach((item, index) => {
+             playerScreenInventoryGridEl.appendChild(createItemSlotDOM(item, index, "player_screen_inventory"));
+        });
+        playerScreenInvContainer.style.overflowY = player.inventory.length > 15 ? 'auto' : 'hidden';
+    }
+
+    function calculateTotalArmor() {
+        player.totalArmor = 0;
+        for (const slot in player.equippedItems) {
+            const item = player.equippedItems[slot];
+            if (item && item.armorValue) {
+                player.totalArmor += item.armorValue;
+            }
+        }
+    }
+
+
+    // --- SHOP LOGIC ---
+    function showShopModal() {
+        shopModalEl.style.top = `0px`; 
+        shopModalEl.style.left = `0px`;
+        shopModalEl.style.width = `100%`;
+        shopModalEl.style.height = `100%`;
+        shopModalEl.style.position = 'fixed'; 
+        shopModalEl.style.display = 'flex';
+        renderShopWares();
+        renderShopPlayerInventory(); 
+        playerGoldShopDisplayEl.textContent = `Your Gold: ${player.gold} G`;
+    }
+    function hideShopModal() {
+        shopModalEl.style.display = 'none';
+    }
+    function renderShopWares() {
+        shopWaresGridEl.innerHTML = '';
+        shopItemsForSale.forEach((shopEntry, index) => {
+            shopWaresGridEl.appendChild(createItemSlotDOM(shopEntry.item, index, "shop", shopEntry.price));
+        });
+    }
+    function renderShopPlayerInventory() { 
+        const shopPlayerInvGrid = document.getElementById('shop-player-inventory-grid');
+        const shopPlayerInvContainer = document.getElementById('shop-player-inventory-container'); 
+        if (!shopPlayerInvGrid || !shopPlayerInvContainer) return; 
+
+        shopPlayerInvGrid.innerHTML = '';
+        player.inventory.forEach((item, index) => {
+            shopPlayerInvGrid.appendChild(createItemSlotDOM(item, index, "inventory")); 
+        });
+        shopPlayerInvContainer.style.overflowY = player.inventory.length > 15 ? 'auto' : 'hidden';
+    }
+
+
+    // --- COMBAT LOGIC ---
+    function initiateCombat(attackedMonsterInstance) { 
+        if (combatActive) { showMessage("You are already in combat!", true); return; }
+        
+        currentCombatants = [attackedMonsterInstance]; 
+        const currentRoomMonsters = rooms[player.currentRoomId].monsters;
+
+        currentRoomMonsters.forEach(monsterInRoom => {
+            const template = monsterTemplates[monsterInRoom.templateId];
+            if (monsterInRoom !== attackedMonsterInstance && monsterInRoom.currentHp > 0 && template.aggressive) {
+                if (!currentCombatants.find(c => c.id === monsterInRoom.id)) { 
+                    currentCombatants.push(monsterInRoom);
+                }
+            }
+        });
+        
+        if (currentCombatants.length === 0) {
+            showMessage("There are no valid targets to fight.", true);
+            return;
+        }
+
+        combatActive = true;
+        combatLogEl.innerHTML = ''; 
+        const monsterNames = currentCombatants.map(m => monsterTemplates[m.templateId].name).join(', ');
+        addCombatLog(`You encounter ${monsterNames}!`);
+        
+        combatModalEl.style.top = `0px`;
+        combatModalEl.style.left = `0px`;
+        combatModalEl.style.width = `100%`;
+        combatModalEl.style.height = `100%`;
+        combatModalEl.style.position = 'fixed';
+
+        const statsHeaderClone = document.getElementById('stats-header-container').cloneNode(true);
+        combatStatsHeaderPlaceholderEl.innerHTML = ''; 
+        combatStatsHeaderPlaceholderEl.appendChild(statsHeaderClone);
+        
+        showCombatModal();
+        updateCombatModalDisplay();
+        combatAttackButtonEl.style.display = 'inline-block';
+        combatAutoButtonEl.style.display = 'inline-block'; 
+        combatAutoButtonEl.textContent = "Auto"; 
+        if (autoCombatIntervalId) { clearInterval(autoCombatIntervalId); autoCombatIntervalId = null;} 
+        closeCombatButtonEl.style.display = 'none';
+        restartGameButtonEl.style.display = 'none';
+    }
+
+    function toggleAutoCombat() {
+        if (autoCombatIntervalId) { 
+            clearInterval(autoCombatIntervalId);
+            autoCombatIntervalId = null;
+            combatAutoButtonEl.textContent = "Auto"; 
+            if(combatActive) combatAttackButtonEl.style.display = 'inline-block'; 
+            addCombatLog("Auto-combat stopped.");
+        } else { 
+            if (!combatActive || currentCombatants.length === 0 || currentCombatants.every(c => c.currentHp <= 0)) {
+                showMessage("No active combat to automate.", true);
+                return;
+            }
+            combatAutoButtonEl.textContent = "Stop Auto"; 
+            combatAttackButtonEl.style.display = 'none'; 
+            addCombatLog("Auto-combat started...");
+            autoCombatIntervalId = setInterval(() => {
+                if (combatActive && player.hp > 0 && currentCombatants.some(c => c.currentHp > 0)) {
+                    processCombatRound();
+                } else {
+                    toggleAutoCombat(); 
+                }
+            }, AUTO_COMBAT_INTERVAL_MS);
+        }
+    }
+
+    function showCombatModal() { combatModalEl.style.display = 'flex'; }
+    function hideCombatModal() { 
+        if (autoCombatIntervalId) { 
+            clearInterval(autoCombatIntervalId);
+            autoCombatIntervalId = null;
+        }
+        combatModalEl.style.display = 'none'; 
+    }
+
+    function addCombatLog(message) {
+        const p = document.createElement('p'); p.textContent = message;
+        combatLogEl.appendChild(p); combatLogEl.scrollTop = combatLogEl.scrollHeight; 
+    }
+
+    function updateCombatModalDisplay() {
+        combatMonstersListEl.innerHTML = '<h4>Fighting:</h4>';
+        currentCombatants.forEach(monsterInstance => {
+            if (monsterInstance.currentHp > 0) {
+                const template = monsterTemplates[monsterInstance.templateId];
+                const monsterEntryDiv = document.createElement('div');
+                monsterEntryDiv.classList.add('combat-monster-entry');
+                
+                // HP Bar first
+                const barContainer = document.createElement('div');
+                barContainer.classList.add('stat-bar-container', 'combat-monster-hp-bar-container'); 
+                const barOuter = document.createElement('div');
+                barOuter.classList.add('stat-bar');
+                const barInner = document.createElement('div');
+                barInner.classList.add('stat-bar-inner', 'enemy-hp-bar'); 
+                barInner.style.width = `${(monsterInstance.currentHp / template.hp) * 100}%`;
+                const barText = document.createElement('div');
+                barText.classList.add('stat-bar-text');
+                barText.textContent = `HP: ${monsterInstance.currentHp}/${template.hp}`;
+                
+                barOuter.appendChild(barInner);
+                barOuter.appendChild(barText);
+                barContainer.appendChild(barOuter);
+                monsterEntryDiv.appendChild(barContainer); // Add HP bar first
+
+                // Then Name
+                const nameP = document.createElement('p');
+                nameP.classList.add('combat-monster-name');
+                nameP.textContent = `${template.name}`;
+                monsterEntryDiv.appendChild(nameP); // Add Name second
+                
+                combatMonstersListEl.appendChild(monsterEntryDiv);
+            }
+        });
+        renderCombatInventory(); 
+    }
+    
+    function rollDice(diceString) { 
+        const match = diceString.match(/(\d+)d(\d+)([\+\-]\d+)?/);
+        if (!match) return 0;
+        const numDice = parseInt(match[1]); const diceSides = parseInt(match[2]);
+        const modifier = match[3] ? parseInt(match[3]) : 0;
+        let total = 0;
+        for (let i = 0; i < numDice; i++) { total += Math.floor(Math.random() * diceSides) + 1; }
+        return total + modifier;
+    }
+
+    function processCombatRound() {
+        if (!combatActive || currentCombatants.length === 0 || currentCombatants.every(c => c.currentHp <= 0)) {
+            if (autoCombatIntervalId) { 
+                toggleAutoCombat(); 
+            }
+            return;
+        }
+
+        const targetMonsterInstance = currentCombatants.find(c => c.currentHp > 0); 
+        if (targetMonsterInstance) {
+            const playerWeapon = player.equippedItems.weapon || player.inventory.find(item => item.id === "sword001"); 
+            const playerAttackDice = playerWeapon ? playerWeapon.attackDice : "1d1+1"; 
+            const playerDamage = rollDice(playerAttackDice);
+            targetMonsterInstance.currentHp = Math.max(0, targetMonsterInstance.currentHp - playerDamage);
+            addCombatLog(`You hit ${monsterTemplates[targetMonsterInstance.templateId].name} for ${playerDamage} damage.`);
+            if (targetMonsterInstance.currentHp <= 0) {
+                addCombatLog(`${monsterTemplates[targetMonsterInstance.templateId].name} dies!`);
+            }
+        }
+
+        currentCombatants.forEach(monsterInstance => {
+            if (monsterInstance.currentHp > 0) { 
+                const template = monsterTemplates[monsterInstance.templateId];
+                let monsterDamage = rollDice(template.attackDice);
+                monsterDamage = Math.max(0, monsterDamage - player.totalArmor); 
+                player.hp = Math.max(0, player.hp - monsterDamage);
+                addCombatLog(`${template.name} hits you for ${monsterDamage} damage (reduced by ${player.totalArmor} armor).`);
+                renderStats(); 
+            }
+        });
+        updateCombatModalDisplay(); 
+        if (player.hp <= 0) { playerDied(); return; }
+        if (currentCombatants.every(c => c.currentHp <= 0)) { allMonstersDied(); }
+    }
+    function playerDied() {
+        addCombatLog("You have been slain!");
+        if (autoCombatIntervalId) { clearInterval(autoCombatIntervalId); autoCombatIntervalId = null; }
+        combatActive = false;
+        combatAttackButtonEl.style.display = 'none';
+        combatAutoButtonEl.style.display = 'none';
+        closeCombatButtonEl.style.display = 'none'; 
+        restartGameButtonEl.style.display = 'inline-block';
+    }
+
+    function allMonstersDied() {
+        addCombatLog("All creatures have been defeated!");
+        if (autoCombatIntervalId) { clearInterval(autoCombatIntervalId); autoCombatIntervalId = null; }
+        combatActive = false;
+        combatAttackButtonEl.style.display = 'none';
+        combatAutoButtonEl.style.display = 'none';
+        closeCombatButtonEl.style.display = 'inline-block'; 
+        
+        if (player.hunger > 0) {
+            player.hunger = Math.max(0, player.hunger - 1);
+            showMessage("You feel a bit hungry after the fight.", false);
+        }
+        
+        let totalXPGained = 0;
+        currentCombatants.forEach(monsterInstance => { 
+            const template = monsterTemplates[monsterInstance.templateId];
+            if (template.xpValue) {
+                totalXPGained += template.xpValue;
+            }
+            if (template.loot) { 
+                if (template.loot.gold) {
+                    player.gold += template.loot.gold;
+                    addCombatLog(`${template.name} dropped ${template.loot.gold} gold.`);
+                }
+                if (template.loot.items) {
+                    template.loot.items.forEach(lootEntry => { 
+                         if (Math.random() < lootEntry.chance) {
+                            const itemProto = gameItems[lootEntry.itemId];
+                            if (itemProto) {
+                                for(let i=0; i < lootEntry.quantity; i++) {
+                                    player.inventory.push({...itemProto}); 
+                                }
+                                addCombatLog(`${template.name} dropped ${lootEntry.quantity} ${itemProto.name}(s).`);
+                            }
+                        }
+                    });
+                }
+            }
+            monsterInstance.nextRespawnTick = currentGameTickNumber + template.respawnTicks;
+        });
+        if (totalXPGained > 0) {
+            player.xp += totalXPGained;
+            addCombatLog(`You gain ${totalXPGained} experience points!`);
+            if (player.xp >= player.xpToNextLevel) {
+                player.level++;
+                player.xp -= player.xpToNextLevel; 
+                player.xpToNextLevel = player.xpToNextLevel * 2; 
+                const levelUpMsg = `Congratulations! You reached Level ${player.level}!`;
+                showMessage(levelUpMsg, false);
+                addCombatLog(levelUpMsg);
+            }
+        }
+        currentCombatants = []; 
+        renderGame(); 
+    }
+
+    function endCombat() {
+        if (autoCombatIntervalId) { clearInterval(autoCombatIntervalId); autoCombatIntervalId = null; }
+        combatActive = false;
+        hideCombatModal();
+        currentCombatants = [];
+        renderGame(); 
+    }
+
+    // --- ITEM ACTIONS ---
+    function performItemAction(item, verb, itemIndexOrSlotName, context, price) { 
+        console.log(`Action: ${verb} on ${item.name} (index/slot ${itemIndexOrSlotName}, context ${context}, price ${price})`);
+        let actionTaken = false;
+        switch (verb) {
+            case "Get": if (context === "ground") { pickUpActualItem(itemIndexOrSlotName); actionTaken = true; } break;
+            case "Drop": if (context === "inventory" || context === "player_screen_inventory") { dropActualItem(itemIndexOrSlotName); actionTaken = true; } break; 
+            case "Eat": eatFoodItem(item, itemIndexOrSlotName, context); actionTaken = true; break;
+            case "Drink": 
+                if (item.type === "potion" && item.healAmount) { drinkPotion(item, itemIndexOrSlotName, context); actionTaken = true; } 
+                else { showMessage("You can't drink that.", true); }
+                break;
+            case "Loot": if (context === "ground" && item.type === "corpse") { lootCorpse(item, itemIndexOrSlotName); actionTaken = true; } break;
+            case "Buy":
+                if (context === "shop") { buyItemFromShop(item, price); actionTaken = true; }
+                break;
+            case "Equip":
+                if (context === "inventory" || context === "player_screen_inventory") { equipItem(itemIndexOrSlotName); actionTaken = true;}
+                break;
+            case "Remove":
+                if (context === "equipment") { removeItem(itemIndexOrSlotName); actionTaken = true;} 
+                break;
+            default: showMessage(`Action "${verb}" not yet implemented for ${item.name}.`, true);
+        }
+        if (actionTaken) {
+            if (combatActive) { updateCombatModalDisplay(); renderStats(); } 
+            renderGame(); 
+        }
+    }
+
+    function equipItem(itemInventoryIndex) {
+        const itemToEquip = player.inventory[itemInventoryIndex];
+        if (!itemToEquip || !itemToEquip.slot) {
+            showMessage("This item cannot be equipped.", true);
+            return;
+        }
+        if (player.equippedItems[itemToEquip.slot] !== null) {
+            showMessage(`Your ${itemToEquip.slot} slot is already full. Remove the current item first.`, true);
+            return;
+        }
+        player.equippedItems[itemToEquip.slot] = itemToEquip;
+        player.inventory.splice(itemInventoryIndex, 1); 
+        showMessage(`Equipped ${itemToEquip.name}.`);
+        calculateTotalArmor();
+    }
+
+    function removeItem(slotName) {
+        const itemToRemove = player.equippedItems[slotName];
+        if (!itemToRemove) {
+            showMessage("Nothing to remove from that slot.", true);
+            return;
+        }
+        player.inventory.push(itemToRemove);
+        player.equippedItems[slotName] = null;
+        showMessage(`Removed ${itemToRemove.name}.`);
+        calculateTotalArmor();
+    }
+    
+    function buyItemFromShop(itemToBuy, price) { 
+        if (player.gold < price) {
+            showMessage("You don't have enough gold.", true);
+            return;
+        }
+        player.gold -= price;
+        player.inventory.push({...itemToBuy}); 
+        showMessage(`You bought ${itemToBuy.name} for ${price} gold.`);
+        playerGoldShopDisplayEl.textContent = `Your Gold: ${player.gold} G`; 
+    }
+    function drinkPotion(potionItem, itemIndex, context) { 
+        if (player.hp >= player.maxHp) { showMessage("You are already at full health.", false); return; }
+        player.hp = Math.min(player.maxHp, player.hp + potionItem.healAmount);
+        const msg = `You drink the ${potionItem.name} and heal ${potionItem.healAmount} HP.`;
+        if(combatActive) addCombatLog(msg);
+        showMessage(msg);
+        if (context === "inventory" || context === "combat" || context === "player_screen_inventory") { player.inventory.splice(itemIndex, 1); } 
+    }
+    function lootCorpse(corpseItem, itemIndexInRoomArray) { 
+        if (!corpseItem.lootTable) { showMessage("The corpse has nothing of value.", false); return; }
+        let lootMessages = [];
+        if (corpseItem.lootTable.gold) {
+            player.gold += corpseItem.lootTable.gold;
+            lootMessages.push(`Found ${corpseItem.lootTable.gold} gold coins.`);
+        }
+        if (corpseItem.lootTable.items) {
+            corpseItem.lootTable.items.forEach(lootEntry => {
+                if (Math.random() < lootEntry.chance) {
+                    const itemProto = gameItems[lootEntry.itemId];
+                    if (itemProto) {
+                        for (let i = 0; i < lootEntry.quantity; i++) {
+                            player.inventory.push({...itemProto}); 
+                        }
+                        lootMessages.push(`Found ${lootEntry.quantity} ${itemProto.name}(s).`);
+                    }
+                }
+            });
+        }
+        if (lootMessages.length > 0) { showMessage(lootMessages.join(" "), false); } 
+        else { showMessage("Found nothing of interest on the corpse.", false); }
+        rooms[player.currentRoomId].items.splice(itemIndexInRoomArray, 1);
+    }
+    function eatFoodItem(item, itemIndex, context) { 
+        if (item.type !== "food") { showMessage("You can't eat that!", true); return; }
+        if (player.hunger >= player.maxHunger) { showMessage("You are already full.", false); return; }
+        player.hunger = Math.min(player.maxHunger, player.hunger + item.hungerValue);
+        const eatMessage = `You eat the ${item.name}. You feel ${HUNGER_STATES[player.hunger].toLowerCase()}.`;
+        showMessage(eatMessage);
+        if(combatActive) addCombatLog(eatMessage);
+
+        if (context === "inventory" || context === "combat" || context === "player_screen_inventory") { player.inventory.splice(itemIndex, 1); } 
+        else if (context === "ground") { rooms[player.currentRoomId].items.splice(itemIndex, 1); }
+    }
+    function pickUpActualItem(itemIndexInRoomArray) { 
+        const currentRoom = rooms[player.currentRoomId];
+        const itemToPickUp = currentRoom.items.splice(itemIndexInRoomArray, 1)[0];
+        if (itemToPickUp) { player.inventory.push(itemToPickUp); showMessage(`Picked up ${itemToPickUp.name}.`); }
+    }
+    function getAllItemsFromGround() {
+        const currentRoom = rooms[player.currentRoomId];
+        if (!currentRoom.items || currentRoom.items.length === 0) {
+            showMessage("There's nothing on the ground to get.", false);
+            return;
+        }
+        let itemsPickedUpCount = 0;
+        for (let i = currentRoom.items.length - 1; i >= 0; i--) {
+            const itemToPickUp = currentRoom.items.splice(i, 1)[0];
+            if (itemToPickUp) {
+                player.inventory.push(itemToPickUp);
+                itemsPickedUpCount++;
+            }
+        }
+        if (itemsPickedUpCount > 0) {
+            showMessage(`Picked up ${itemsPickedUpCount} item(s) from the ground.`);
+            renderGame();
+        } else {
+            showMessage("Nothing was picked up.", false); 
+        }
+    }
+
+    function dropActualItem(itemIndexInInventory) { 
+        const currentRoom = rooms[player.currentRoomId];
+        if (!currentRoom.items) currentRoom.items = []; 
+        const itemToDrop = player.inventory.splice(itemIndexInInventory, 1)[0]; 
+        if (itemToDrop) { currentRoom.items.push(itemToDrop); showMessage(`Dropped ${itemToDrop.name}.`); }
+    }
+    
+    // --- MOVEMENT & GAME TICK ---
+    function moveToRoom(newRoomId, directionUsed) { 
+        if (player.movePoints <= 0) { showMessage("You are too tired to move (0 Movement Points).", true); return; }
+        if (rooms[newRoomId]) {
+            player.movePoints = Math.max(0, player.movePoints - 1); 
+            player.currentRoomId = newRoomId;
+            let moveMessage = `Moved ${directionUsed} to ${rooms[newRoomId].title}. (-1 Move Point)`;
+            showMessage(moveMessage);
+            renderGame(); 
+            if (rooms[newRoomId].isShop) {
+                showShopModal();
+            } else {
+                hideShopModal(); 
+            }
+        } else { console.error("Attempted to move to non-existent room:", newRoomId); showMessage("Cannot move to that location: Room does not exist.", true); }
+    }
+    function handleCellClick(targetRoomId) { 
+        const playerRoom = rooms[player.currentRoomId]; const targetCellRoom = rooms[targetRoomId];
+        if (targetRoomId === player.currentRoomId) return;
+        if (!playerRoom) { showMessage("Error: Current player room is invalid.", true); return; }
+        if (!targetCellRoom) return; 
+        for (const direction of ['north', 'south', 'east', 'west']) {
+            if (playerRoom.exits[direction] === targetRoomId) { moveToRoom(targetRoomId, direction); return; }
+        }
+        const isAdjacentOnSameLevel = (r1Id, r2Id) => { const c1 = parseRoomId(r1Id); const c2 = parseRoomId(r2Id); if (!c1 || !c2 || c1.z !== c2.z) return false; return (Math.abs(c1.x - c2.x) === 1 && c1.y === c2.y) || (Math.abs(c1.y - c2.y) === 1 && c1.x === c2.x); };
+        if (isAdjacentOnSameLevel(player.currentRoomId, targetRoomId)) { showMessage("There's no direct path that way.", true); }
+    }
+    function handleStairsClick(direction) {  
+        const currentRoom = rooms[player.currentRoomId];
+        if (currentRoom && currentRoom.exits[direction]) {
+            if (player.movePoints <= 0) { showMessage("You are too tired to use the stairs (0 Movement Points).", true); return; }
+            moveToRoom(currentRoom.exits[direction], direction);
+        } else { showMessage(`There are no stairs leading ${direction} from here.`, true); }
+    }
+    function handleNumpadInput(event) { 
+        const currentRoom = rooms[player.currentRoomId];
+        if (!currentRoom || !currentRoom.exits) return; if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return; 
+        let direction = null;
+        switch (event.code) {
+            case 'Numpad8': direction = 'north'; break; case 'Numpad2': direction = 'south'; break;
+            case 'Numpad6': direction = 'east';  break; case 'Numpad4': direction = 'west';  break;
+            case 'Numpad9': direction = 'up';    break; case 'Numpad3': direction = 'down';  break;
+            default: return; 
+        }
+        event.preventDefault(); const targetRoomId = currentRoom.exits[direction];
+        if (targetRoomId) { if (direction === 'up' || direction === 'down') { handleStairsClick(direction); } else { moveToRoom(targetRoomId, direction); }
+        } else if (direction) { showMessage(`You cannot go ${direction} from here.`, true); }
+    }
+    function startGameTick() { if (gameTickIntervalId) clearInterval(gameTickIntervalId); gameTickIntervalId = setInterval(gameTick, GAME_TICK_INTERVAL); }
+    
+    function gameTick() { 
+        currentGameTickNumber++;
+        let regenerated = false;
+        if (player.hp < player.maxHp) { player.hp = Math.min(player.maxHp, player.hp + REGEN_AMOUNT); regenerated = true; }
+        if (player.mp < player.maxMp) { player.mp = Math.min(player.maxMp, player.mp + REGEN_AMOUNT); regenerated = true; }
+        if (player.movePoints < player.maxMovePoints) { player.movePoints = Math.min(player.maxMovePoints, player.movePoints + REGEN_AMOUNT); regenerated = true; }
+        
+        if (player.hunger === 0 && (currentGameTickNumber % STARVATION_DAMAGE_TICKS === 0)) {
+            if (player.hp > 0) {
+                player.hp = Math.max(0, player.hp - STARVATION_DAMAGE);
+                showMessage("You are starving and lose some health!", true);
+                regenerated = true; 
+                if (player.hp === 0) {
+                    showMessage("You have starved to death!", true);
+                }
+            }
+        }
+
+        let monstersRespawnedThisTick = false;
+        Object.values(rooms).forEach(room => {
+            if (room.monsters) {
+                room.monsters.forEach(monsterInstance => {
+                    if (monsterInstance.nextRespawnTick !== -1 && monsterInstance.nextRespawnTick <= currentGameTickNumber) {
+                        const template = monsterTemplates[monsterInstance.templateId];
+                        monsterInstance.currentHp = template.hp;
+                        monsterInstance.nextRespawnTick = -1; 
+                        monstersRespawnedThisTick = true;
+                        if (player.currentRoomId === Object.keys(rooms).find(key => rooms[key] === room)) { 
+                             showMessage(`${template.name} has appeared!`, false);
+                        }
+                        console.log(`${template.name} in room ${room.title} has respawned.`);
+                    }
+                });
+            }
+        });
+
+        if (regenerated) { renderStats(); }
+        if (monstersRespawnedThisTick) { renderCreatures(); } 
+        console.log("Tick:", currentGameTickNumber, "HP:", player.hp, "MP:", player.mp, "Move:", player.movePoints, "Hunger:", HUNGER_STATES[player.hunger]);
+    }
+
+    document.addEventListener('DOMContentLoaded', initializeGame);
+</script>
+</body>
+</html>
